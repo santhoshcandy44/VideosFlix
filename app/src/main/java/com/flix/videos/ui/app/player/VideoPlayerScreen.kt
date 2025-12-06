@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import android.media.MediaScannerConnection
 import android.os.Build
+import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.ComponentActivity
@@ -85,7 +86,12 @@ import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toRect
 import androidx.core.util.Consumer
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -164,7 +170,6 @@ fun VideoPlayerScreen(
     }
 
     val isInPipMode = rememberIsInPipMode()
-    var currentShouldEnterPipMode by rememberSaveable { mutableStateOf(false) }
 
     val pipBuilder = viewModel.pipBuilder
 
@@ -221,10 +226,24 @@ fun VideoPlayerScreen(
 
     LifecycleResumeEffect(Unit) {
         showPlayerControls()
-        onPauseOrDispose {
-            if (!currentShouldEnterPipMode) {
-                exoPlayer.pause()
+        onPauseOrDispose {}
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { source, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    exoPlayer.pause()
+                }
+
+                else -> {}
             }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -347,20 +366,19 @@ fun VideoPlayerScreen(
     }
 
     DisposableEffect(context) {
+        val activity = context.findActivity() as ComponentActivity
+
         val onUserLeaveBehavior = Runnable {
-            currentShouldEnterPipMode = isPlaying
-            if (currentShouldEnterPipMode) {
-                context.findActivity()
+            if (isPlaying) {
+                activity
                     .enterPictureInPictureMode(pipBuilder.build())
             }
         }
 
-        val activity = context.findActivity() as ComponentActivity
         activity.addOnUserLeaveHintListener(
             onUserLeaveBehavior
         )
         onDispose {
-            currentShouldEnterPipMode = false
             activity.removeOnUserLeaveHintListener(
                 onUserLeaveBehavior
             )
@@ -373,7 +391,7 @@ fun VideoPlayerScreen(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        if (currentShouldEnterPipMode && isInPipMode) {
+        if (isInPipMode) {
             AndroidView(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -671,8 +689,7 @@ fun VideoPlayerScreen(
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 AnimatedVisibility(
                     visible = isControlsVisible,
                     enter = fadeIn(
