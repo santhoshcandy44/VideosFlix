@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SuperBos" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Splash background -->
+        <item name="windowSplashScreenBackground">#000000</item>
+
+        <!-- After splash ends, app automatically switches to this theme -->
+        <item name="postSplashScreenTheme">@style/Theme.SuperBos</item>
+    </style>
+    <style name="Theme.PlayerActivity" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
