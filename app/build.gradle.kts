@@ -89,6 +89,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-exoplayer-smoothstreaming:1.8.0")
+
+    //DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.0")
 }
 
 ksp {

@@ -58,7 +58,7 @@ fun GroupVideosScreen(
             Text(groupName, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Spacer(modifier = Modifier.height(8.dp))
-        VideosListScreen(
+        VideosList(
             videInfos,
             viewModel,
             modifier = Modifier.weight(1f)
