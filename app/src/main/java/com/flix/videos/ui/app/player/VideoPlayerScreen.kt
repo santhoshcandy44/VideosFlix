@@ -20,6 +20,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -42,6 +43,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Replay10
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -98,6 +102,7 @@ import com.flix.videos.ui.app.player.viewmodel.ExoplayerSeekDirection.SEEK_BACKW
 import com.flix.videos.ui.app.player.viewmodel.ExoplayerSeekDirection.SEEK_FORWARD
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
+import com.flix.videos.ui.utils.NoIndicationInteractionSource
 import com.flix.videos.ui.utils.findActivity
 import com.flix.videos.ui.utils.shortToast
 import kotlinx.coroutines.Job
@@ -132,9 +137,14 @@ fun VideoPlayerScreen(
     val sliderProgress by viewModel.sliderProgress.collectAsState()
     val currentDurationMillis by viewModel.currentDurationMillis.collectAsState()
     val isControlsVisible by viewModel.isControlsVisible.collectAsState()
+    val isMuted by viewModel.isMuted.collectAsState()
 
     val context = LocalContext.current
-    var doubleTapSeekDirection by rememberSaveable { mutableStateOf(ExoplayerSeekDirection.SEEK_NONE) }
+    var doubleTapSeekDirection by rememberSaveable {
+        androidx.compose.runtime.mutableIntStateOf(
+            ExoplayerSeekDirection.SEEK_NONE
+        )
+    }
 
     val textureView = remember { TextureView(context) }
     val thumbSize = DpSize(14.dp, 14.dp)
@@ -452,7 +462,14 @@ fun VideoPlayerScreen(
                             val sourceRect =
                                 layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
                             pipBuilder.setSourceRectHint(sourceRect)
-                            pipBuilder.setAspectRatio(Rational(videoWidth, videoHeight))
+
+                            val minRatio = 0.418410f
+                            val maxRatio = 2.39f
+
+                            val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
+                            val clamped = rawRatio.coerceIn(minRatio, maxRatio)
+
+                            pipBuilder.setAspectRatio(Rational((clamped * 10000).toInt(), 10000))
                             updatePipActions()
                         }, factory = {
                         exoPlayer.setVideoTextureView(textureView)
@@ -620,69 +637,89 @@ fun VideoPlayerScreen(
                             }
                         }
 
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.BottomCenter)
                                 .padding(horizontal = 16.dp)
                                 .padding(bottom = 24.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                color = Color.White,
-                                text = formatTimeSeconds(totalDurationMillis / 1000f),
-                            )
-
-                            Slider(
-                                value = sliderProgress,
-                                onValueChange = {
-                                    cancelControlsHideJob()
-                                    viewModel.onSliderValueChange(it)
-                                    viewModel.onUpdateSliderValueChange(true)
-                                },
-                                valueRange = 0f..1f,
+                            Row(
                                 modifier = Modifier
-                                    .semantics {
-                                        contentDescription = "Localized Description"
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = if (isMuted) "Unmute" else "Mute",
+                                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null){
+                                        viewModel.toggleMute()
                                     }
-                                    .weight(1f),
-                                thumb = {
-                                    SliderDefaults.Thumb(
-                                        interactionSource = interactionSource,
-                                        modifier = Modifier
-                                            .size(thumbSize)
-                                            .shadow(1.dp, CircleShape, clip = false)
-                                            .indication(
-                                                interactionSource = interactionSource,
-                                                indication = ripple(
-                                                    bounded = false,
-                                                    radius = 20.dp
-                                                )
-                                            )
-                                    )
-                                },
-                                onValueChangeFinished = {
-                                    scheduleControlsHideJob()
-                                    viewModel.onSliderValueChangeFinished()
-                                    viewModel.onUpdateSliderValueChange(false)
-                                },
-                                track = {
-                                    SliderDefaults.Track(
-                                        sliderState = it,
-                                        modifier = Modifier
-                                            .padding(vertical = 32.dp)
-                                            .height(trackHeight),
-                                        thumbTrackGapSize = 0.dp,
-                                        trackInsideCornerSize = 0.dp,
-                                        drawStopIndicator = null
-                                    )
-                                })
+                                )
+                            }
 
-                            Text(
-                                color = Color.White,
-                                text = formatTimeSeconds(currentDurationMillis / 1000f),
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    color = Color.White,
+                                    text = formatTimeSeconds(totalDurationMillis / 1000f),
+                                )
+
+                                Slider(
+                                    value = sliderProgress,
+                                    onValueChange = {
+                                        cancelControlsHideJob()
+                                        viewModel.onSliderValueChange(it)
+                                        viewModel.onUpdateSliderValueChange(true)
+                                    },
+                                    valueRange = 0f..1f,
+                                    modifier = Modifier
+                                        .semantics {
+                                            contentDescription = "Localized Description"
+                                        }
+                                        .weight(1f),
+                                    thumb = {
+                                        SliderDefaults.Thumb(
+                                            interactionSource = interactionSource,
+                                            modifier = Modifier
+                                                .size(thumbSize)
+                                                .shadow(1.dp, CircleShape, clip = false)
+                                                .indication(
+                                                    interactionSource = interactionSource,
+                                                    indication = ripple(
+                                                        bounded = false,
+                                                        radius = 20.dp
+                                                    )
+                                                )
+                                        )
+                                    },
+                                    onValueChangeFinished = {
+                                        scheduleControlsHideJob()
+                                        viewModel.onSliderValueChangeFinished()
+                                        viewModel.onUpdateSliderValueChange(false)
+                                    },
+                                    track = {
+                                        SliderDefaults.Track(
+                                            sliderState = it,
+                                            modifier = Modifier
+                                                .padding(vertical = 32.dp)
+                                                .height(trackHeight),
+                                            thumbTrackGapSize = 0.dp,
+                                            trackInsideCornerSize = 0.dp,
+                                            drawStopIndicator = null
+                                        )
+                                    })
+
+                                Text(
+                                    color = Color.White,
+                                    text = formatTimeSeconds(currentDurationMillis / 1000f),
+                                )
+                            }
                         }
                     }
                 }

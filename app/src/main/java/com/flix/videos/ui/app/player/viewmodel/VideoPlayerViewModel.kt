@@ -3,12 +3,14 @@ package com.flix.videos.ui.app.player.viewmodel
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -20,6 +22,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
+import androidx.core.net.toUri
 
 object ExoplayerSeekDirection {
     const val SEEK_NONE = 0
@@ -27,18 +30,20 @@ object ExoplayerSeekDirection {
     const val SEEK_BACKWARD = -1
 }
 
+@OptIn(UnstableApi::class)
 @KoinViewModel
-class VideoPlayerViewModel(
-    val context: Context,
+class VideoPlayerViewModel
+    (
+    val applicationContext: Context,
     @InjectedParam uri: String,
     @InjectedParam val title: String,
     @InjectedParam val videoWidth: Int,
     @InjectedParam val videoHeight: Int,
     @InjectedParam val totalDurationMillis: Long
 ) : ViewModel() {
-    val videoUri: Uri = Uri.parse(uri)
+    val videoUri: Uri = uri.toUri()
 
-    val exoPlayer = ExoPlayer.Builder(context.applicationContext).build()
+    val exoPlayer = ExoPlayer.Builder(applicationContext.applicationContext).build()
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -54,6 +59,9 @@ class VideoPlayerViewModel(
     private val _isControlsVisible = MutableStateFlow(false)
     val isControlsVisible = _isControlsVisible.asStateFlow()
 
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted = _isMuted.asStateFlow()
+
     private var progressJob: Job? = null
 
     val pipBuilder = PictureInPictureParams.Builder()
@@ -68,7 +76,7 @@ class VideoPlayerViewModel(
         )
         exoPlayer.setMediaSource(
             DefaultMediaSourceFactory(
-                DefaultDataSource.Factory(context),
+                DefaultDataSource.Factory(applicationContext),
             ).createMediaSource(mediaItem)
         )
         exoPlayer.prepare()
@@ -122,6 +130,11 @@ class VideoPlayerViewModel(
                 exoPlayer.play()
             }
         }
+    }
+
+    fun toggleMute() {
+       _isMuted.value = !_isMuted.value
+        exoPlayer.volume = if(_isMuted.value) 0f else 1f
     }
 
     fun seekForward(millis: Long = 10_000) {
