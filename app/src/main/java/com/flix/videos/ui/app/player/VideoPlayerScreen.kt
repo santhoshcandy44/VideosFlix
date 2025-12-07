@@ -11,7 +11,6 @@ import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import android.media.MediaScannerConnection
 import android.os.Build
-import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.ComponentActivity
@@ -88,8 +87,6 @@ import androidx.core.graphics.toRect
 import androidx.core.util.Consumer
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.LifecycleObserver
-import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.PlaybackException
@@ -232,7 +229,7 @@ fun VideoPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { source, event ->
+        val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     exoPlayer.pause()
@@ -420,13 +417,13 @@ fun VideoPlayerScreen(
                             if (isLeftSide) {
                                 if (exoPlayer.currentPosition > 0) {
                                     doubleTapSeekDirection =
-                                        ExoplayerSeekDirection.SEEK_BACKWARD
+                                        SEEK_BACKWARD
                                     viewModel.seekBackward()
                                 }
                             } else if (isRightSide) {
                                 if (exoPlayer.currentPosition < totalDurationMillis) {
                                     doubleTapSeekDirection =
-                                        ExoplayerSeekDirection.SEEK_FORWARD
+                                        SEEK_FORWARD
                                     viewModel.seekForward()
                                 }
                             }

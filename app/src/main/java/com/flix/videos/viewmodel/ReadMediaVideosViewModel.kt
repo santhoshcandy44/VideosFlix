@@ -3,22 +3,18 @@ package com.flix.videos.viewmodel
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Size
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
-import com.flix.videos.App
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.bottombar.NavigationBarRoutes
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,8 +29,6 @@ enum class ViewMode {
     GRID
 }
 
-private val Context.appPrefsDataStore by preferencesDataStore(name = "app_prefs")
-
 @KoinViewModel
 class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
     val videosBackstack = NavBackStack<NavKey>(NavigationBarRoutes.Videos)
@@ -43,36 +37,32 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
     private val _videoInfos = MutableStateFlow<List<VideoInfo>>(emptyList())
     val videoInfos = _videoInfos.asStateFlow()
 
-    private val dataStore = applicationContext.appPrefsDataStore
+    private val sharedPrefs =
+        applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
     companion object {
-        private val KEY_VIEW_MODE = stringPreferencesKey("videos_view_mode")
+        private const val KEY_VIEW_MODE = "videos_view_mode"
     }
 
-    val videosViewMode = dataStore.data
-        .map { prefs ->
-            val value = prefs[KEY_VIEW_MODE] ?: ViewMode.LIST.name
-            ViewMode.valueOf(value)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ViewMode.LIST)
+    private val _videosViewMode = MutableStateFlow(getViewMode(sharedPrefs))
+    val videosViewMode = _videosViewMode.asStateFlow()
 
-
-    val groupedVideos =
-        _videoInfos
-            .map { items ->
-                items.groupBy { File(it.path).parent ?: "Unknown" }
-                    .mapValues { (parentPath, list) ->
-                        list.map { video ->
-                            video.copy(
-                                displayGroupName = File(parentPath).name
-                            )
-                        }
+    val groupedVideos = _videoInfos
+        .map { items ->
+            items.groupBy { File(it.path).parent ?: "Unknown" }
+                .mapValues { (parentPath, list) ->
+                    list.map { video ->
+                        video.copy(
+                            displayGroupName = File(parentPath).name
+                        )
                     }
-            }
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5000),
-                emptyMap()
-            )
+                }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            emptyMap()
+        )
 
     val mediaVideoObserver = object : ContentObserver(null) {
         override fun onChange(selfChange: Boolean) {
@@ -80,8 +70,15 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
             fetchVideoInfos()
         }
     }
+    private val sharedPreferencesListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == KEY_VIEW_MODE) {
+                _videosViewMode.value = getViewMode(prefs)
+            }
+        }
 
     init {
+        sharedPrefs.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
         applicationContext.contentResolver.registerContentObserver(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             true,
@@ -90,12 +87,14 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
         fetchVideoInfos()
     }
 
+    private fun getViewMode(prefs: SharedPreferences): ViewMode {
+        val name = prefs.getString(KEY_VIEW_MODE, ViewMode.LIST.name)!!
+        return ViewMode.valueOf(name)
+    }
+
     fun saveVideoViewMode(mode: ViewMode) {
-        viewModelScope.launch {
-            dataStore.edit { prefs ->
-                prefs[KEY_VIEW_MODE] = mode.name
-            }
-        }
+        sharedPrefs.edit().putString(KEY_VIEW_MODE, mode.name).apply()
+        _videosViewMode.value = mode
     }
 
     fun fetchVideoInfos() {
@@ -161,7 +160,19 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
 
                 // FAST thumbnail
                 val thumbnail = try {
-                    context.contentResolver.loadThumbnail(uri, Size(300, 300), null)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        context.contentResolver.loadThumbnail(uri, Size(300, 300), null)
+                    } else {
+                        if (id == -1L)
+                            null
+                        else
+                            MediaStore.Images.Thumbnails.getThumbnail(
+                                context.contentResolver,
+                                id,
+                                MediaStore.Images.Thumbnails.MINI_KIND,
+                                null
+                            )
+                    }
                 } catch (_: Exception) {
                     null
                 }
@@ -217,5 +228,6 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         applicationContext.contentResolver.unregisterContentObserver(mediaVideoObserver)
+        sharedPrefs.unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener)
     }
 }
