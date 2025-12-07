@@ -1,4 +1,4 @@
-package com.flix.videos.ui.app.player
+package com.flix.videos.ui.app.player.observables
 
 import android.content.Context
 import android.database.ContentObserver

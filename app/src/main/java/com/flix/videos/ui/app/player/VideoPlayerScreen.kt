@@ -1,21 +1,13 @@
 package com.flix.videos.ui.app.player
 
-import android.app.PendingIntent
 import android.app.PictureInPictureParams
-import android.app.RemoteAction
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.graphics.drawable.Icon
 import android.media.MediaScannerConnection
 import android.util.Rational
-import android.view.OrientationEventListener
 import android.view.TextureView
 import androidx.activity.ComponentActivity
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -89,17 +81,20 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.PictureInPictureModeChangedInfo
-import androidx.core.content.ContextCompat
 import androidx.core.graphics.toRect
 import androidx.core.util.Consumer
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.flix.videos.R
+import com.flix.videos.ui.app.player.observables.createPipAction
+import com.flix.videos.ui.app.player.observables.observePipRemoteActions
+import com.flix.videos.ui.app.player.observables.observeSystemVolume
+import com.flix.videos.ui.app.player.observables.observeUserLeaveHint
+import com.flix.videos.ui.app.player.observables.observerLifeCycleEvent
+import com.flix.videos.ui.app.player.observables.rememberDeviceOrientationFlow
 import com.flix.videos.ui.app.player.viewmodel.ExoplayerSeekDirection
 import com.flix.videos.ui.app.player.viewmodel.ExoplayerSeekDirection.SEEK_BACKWARD
 import com.flix.videos.ui.app.player.viewmodel.ExoplayerSeekDirection.SEEK_FORWARD
@@ -110,8 +105,6 @@ import com.flix.videos.ui.utils.findActivity
 import com.flix.videos.ui.utils.shortToast
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 // Constant for broadcast receiver
@@ -124,44 +117,6 @@ const val EXTRA_CONTROL_PAUSE = 2
 
 //Close Player
 const val EXTRA_CONTROL_CLOSE = 3
-
-@Composable
-fun rememberDeviceOrientationFlow(): StateFlow<Int> {
-    val context = LocalContext.current
-
-    val orientationFlow = remember { MutableStateFlow(Configuration.ORIENTATION_UNDEFINED) }
-
-    DisposableEffect(Unit) {
-        val listener = object : OrientationEventListener(context) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (orientation == ORIENTATION_UNKNOWN) return
-
-                val newOrientation = when {
-                    orientation in 60..120 || orientation in 240..300 ->
-                        Configuration.ORIENTATION_LANDSCAPE
-
-                    orientation in 300..360 || orientation in 0..30 || orientation in 150..210 ->
-                        Configuration.ORIENTATION_PORTRAIT
-
-                    else ->
-                        Configuration.ORIENTATION_UNDEFINED
-                }
-
-                if (orientationFlow.value != newOrientation) {
-                    orientationFlow.value = newOrientation
-                }
-            }
-        }
-
-        listener.enable()
-
-        onDispose {
-            listener.disable()
-        }
-    }
-
-    return orientationFlow
-}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,6 +161,7 @@ fun VideoPlayerScreen(
 
     fun cancelControlsHideJob() {
         autoHideJob?.cancel()
+        autoHideJob = null
     }
 
     fun createControlsHideJob(timeMillis: Long = 5000) {
@@ -230,37 +186,12 @@ fun VideoPlayerScreen(
 
     val pipBuilder = viewModel.pipBuilder
 
-    fun createPipAction(
-        @DrawableRes iconRes: Int,
-        title: String,
-        requestCode: Int,
-        controlType: Int
-    ): RemoteAction {
-        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-            setPackage(context.packageName)
-            putExtra(EXTRA_CONTROL_TYPE, controlType)
-        }
-
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            requestCode,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return RemoteAction(
-            Icon.createWithResource(context, iconRes),
-            title,
-            title,
-            pendingIntent
-        )
-    }
-
     fun updatePipActions(): PictureInPictureParams.Builder {
         val actions = buildList {
             if (exoPlayer.isPlaying) {
                 add(
                     createPipAction(
+                        context = context,
                         iconRes = R.drawable.ic_video_pause,
                         title = "Pause",
                         requestCode = EXTRA_CONTROL_PAUSE,
@@ -270,6 +201,7 @@ fun VideoPlayerScreen(
             } else {
                 add(
                     createPipAction(
+                        context = context,
                         iconRes = R.drawable.ic_video_play,
                         title = "Play",
                         requestCode = EXTRA_CONTROL_PLAY,
@@ -294,21 +226,12 @@ fun VideoPlayerScreen(
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    exoPlayer.pause()
-                }
-
-                else -> {}
+    observerLifeCycleEvent { event ->
+        when (event) {
+            Lifecycle.Event.ON_STOP -> {
+                exoPlayer.pause()
             }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            else -> {}
         }
     }
 
@@ -406,56 +329,29 @@ fun VideoPlayerScreen(
         }
     }
 
-    DisposableEffect(Unit) {
-        val broadcastReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, intent: Intent?) {
-                if ((intent == null) || (intent.action != ACTION_BROADCAST_CONTROL)) {
-                    return
-                }
-                when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
-                    EXTRA_CONTROL_PAUSE -> {
-                        exoPlayer.pause()
-                    }
+    observePipRemoteActions { intent ->
+        if ((intent == null) || (intent.action != ACTION_BROADCAST_CONTROL)) {
+            return@observePipRemoteActions
+        }
+        when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
+            EXTRA_CONTROL_PAUSE -> {
+                exoPlayer.pause()
+            }
 
-                    EXTRA_CONTROL_PLAY -> {
-                        exoPlayer.play()
-                    }
+            EXTRA_CONTROL_PLAY -> {
+                exoPlayer.play()
+            }
 
-                    EXTRA_CONTROL_CLOSE -> {
-                        context.findActivity().finish()
-                    }
-                }
-                context.findActivity().setPictureInPictureParams(updatePipActions().build())
+            EXTRA_CONTROL_CLOSE -> {
+                context.findActivity().finish()
             }
         }
-        ContextCompat.registerReceiver(
-            context,
-            broadcastReceiver,
-            IntentFilter(ACTION_BROADCAST_CONTROL),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        onDispose {
-            context.unregisterReceiver(broadcastReceiver)
-        }
+        context.findActivity().setPictureInPictureParams(updatePipActions().build())
     }
 
-    DisposableEffect(context) {
-        val activity = context.findActivity() as ComponentActivity
-
-        val onUserLeaveBehavior = Runnable {
-            if (isPlaying) {
-                activity
-                    .enterPictureInPictureMode(pipBuilder.build())
-            }
-        }
-
-        activity.addOnUserLeaveHintListener(
-            onUserLeaveBehavior
-        )
-        onDispose {
-            activity.removeOnUserLeaveHintListener(
-                onUserLeaveBehavior
-            )
+    observeUserLeaveHint {
+        if (isPlaying) {
+            context.findActivity().enterPictureInPictureMode(pipBuilder.build())
         }
     }
 
@@ -755,8 +651,8 @@ fun VideoPlayerScreen(
                                 if (isPlaying) {
                                     IconButton(
                                         onClick = {
-                                            context.findActivity()
-                                                .enterPictureInPictureMode(pipBuilder.build())
+                                            viewModel.hideControls()
+                                            context.findActivity().enterPictureInPictureMode(pipBuilder.build())
                                         },
                                         interactionSource = remember { NoIndicationInteractionSource() }
                                     ) {
@@ -769,10 +665,9 @@ fun VideoPlayerScreen(
 
                                 IconButton(
                                     onClick = {
-                                        viewModel.updateLockedOrientation(true)
                                         viewModel.hideControls()
-                                        context.findActivity().requestedOrientation =
-                                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                                        viewModel.updateLockedOrientation(true)
+                                        context.findActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
                                     },
                                     interactionSource = remember { NoIndicationInteractionSource() }) {
                                     Icon(
@@ -902,6 +797,7 @@ fun VideoPlayerScreen(
                                 onValueChange = {
                                     cancelControlsHideJob()
                                     viewModel.onSliderValueChange(it)
+                                    viewModel.onUpdateSliderValueChange(true)
                                 },
                                 valueRange = 0f..1f,
                                 modifier = Modifier
@@ -927,6 +823,7 @@ fun VideoPlayerScreen(
                                 onValueChangeFinished = {
                                     scheduleControlsHideJob()
                                     viewModel.onSliderValueChangeFinished()
+                                    viewModel.onUpdateSliderValueChange(false)
                                 },
                                 track = {
                                     SliderDefaults.Track(
