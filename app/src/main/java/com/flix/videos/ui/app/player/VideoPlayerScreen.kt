@@ -7,11 +7,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.drawable.Icon
 import android.media.MediaScannerConnection
-import android.os.Build
 import android.util.Rational
+import android.view.OrientationEventListener
 import android.view.TextureView
 import androidx.activity.ComponentActivity
 import androidx.annotation.DrawableRes
@@ -20,7 +21,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -43,11 +43,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.Forward10
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.Replay10
+import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -107,6 +110,8 @@ import com.flix.videos.ui.utils.findActivity
 import com.flix.videos.ui.utils.shortToast
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 // Constant for broadcast receiver
@@ -119,6 +124,44 @@ const val EXTRA_CONTROL_PAUSE = 2
 
 //Close Player
 const val EXTRA_CONTROL_CLOSE = 3
+
+@Composable
+fun rememberDeviceOrientationFlow(): StateFlow<Int> {
+    val context = LocalContext.current
+
+    val orientationFlow = remember { MutableStateFlow(Configuration.ORIENTATION_UNDEFINED) }
+
+    DisposableEffect(Unit) {
+        val listener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+
+                val newOrientation = when {
+                    orientation in 60..120 || orientation in 240..300 ->
+                        Configuration.ORIENTATION_LANDSCAPE
+
+                    orientation in 300..360 || orientation in 0..30 || orientation in 150..210 ->
+                        Configuration.ORIENTATION_PORTRAIT
+
+                    else ->
+                        Configuration.ORIENTATION_UNDEFINED
+                }
+
+                if (orientationFlow.value != newOrientation) {
+                    orientationFlow.value = newOrientation
+                }
+            }
+        }
+
+        listener.enable()
+
+        onDispose {
+            listener.disable()
+        }
+    }
+
+    return orientationFlow
+}
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,8 +181,15 @@ fun VideoPlayerScreen(
     val currentDurationMillis by viewModel.currentDurationMillis.collectAsState()
     val isControlsVisible by viewModel.isControlsVisible.collectAsState()
     val isMuted by viewModel.isMuted.collectAsState()
+    val isLockedOrientation by viewModel.isLockedOrientation.collectAsState()
 
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val orientation = configuration.orientation
+    val deviceOrientationFlow = rememberDeviceOrientationFlow()
+    val deviceOrientation by deviceOrientationFlow.collectAsState()
+
+    var lastOrientation by rememberSaveable { mutableStateOf(orientation) }
     var doubleTapSeekDirection by rememberSaveable {
         androidx.compose.runtime.mutableIntStateOf(
             ExoplayerSeekDirection.SEEK_NONE
@@ -236,6 +286,14 @@ fun VideoPlayerScreen(
         onPauseOrDispose {}
     }
 
+    LaunchedEffect(deviceOrientation) {
+        if (isLockedOrientation) return@LaunchedEffect
+        if (deviceOrientation != lastOrientation) {
+            context.findActivity().requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -252,6 +310,10 @@ fun VideoPlayerScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    observeSystemVolume { volume ->
+        viewModel.setMuted(volume == 0)
     }
 
     LaunchedEffect(isPlaying) {
@@ -272,6 +334,11 @@ fun VideoPlayerScreen(
                   videoWidth = correctedWidth
                   videoHeight = correctedHeight
               }*/
+
+            override fun onVolumeChanged(volume: Float) {
+                super.onVolumeChanged(volume)
+                viewModel.setMuted(volume == 0f)
+            }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 super.onPlaybackStateChanged(playbackState)
@@ -420,33 +487,36 @@ fun VideoPlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(onDoubleTap = { offset ->
-                            val isLeftSide = offset.x < size.width / 2
-                            val isRightSide = offset.x >= size.width / 2
-                            if (isLeftSide) {
-                                if (exoPlayer.currentPosition > 0) {
-                                    doubleTapSeekDirection =
-                                        SEEK_BACKWARD
-                                    viewModel.seekBackward()
+                    .pointerInput(isLockedOrientation) {
+                        if (!isLockedOrientation) {
+                            detectTapGestures(onDoubleTap = { offset ->
+                                val isLeftSide = offset.x < size.width / 2
+                                val isRightSide = offset.x >= size.width / 2
+                                if (isLeftSide) {
+                                    if (exoPlayer.currentPosition > 0) {
+                                        doubleTapSeekDirection =
+                                            SEEK_BACKWARD
+                                        viewModel.seekBackward()
+                                    }
+                                } else if (isRightSide) {
+                                    if (exoPlayer.currentPosition < totalDurationMillis) {
+                                        doubleTapSeekDirection =
+                                            SEEK_FORWARD
+                                        viewModel.seekForward()
+                                    }
                                 }
-                            } else if (isRightSide) {
-                                if (exoPlayer.currentPosition < totalDurationMillis) {
-                                    doubleTapSeekDirection =
-                                        SEEK_FORWARD
-                                    viewModel.seekForward()
+                            }, onTap = {
+                                if (isControlsVisible) {
+                                    enterFullScreenMode(context.findActivity())
+                                    viewModel.hideControls()
+                                } else {
+                                    showPlayerControls()
                                 }
-                            }
-                        }, onTap = {
-                            if (isControlsVisible) {
-                                enterFullScreenMode(context.findActivity())
-                                viewModel.hideControls()
-                            } else {
-                                showPlayerControls()
-                            }
-                        }, onPress = {
-                            cancelControlsHideJob()
-                        })
+                            }, onPress = {
+                                cancelControlsHideJob()
+                            })
+                        }
+
                     }) {
                 AndroidView(
                     modifier = Modifier
@@ -479,6 +549,27 @@ fun VideoPlayerScreen(
                             exoPlayer.setVideoTextureView(textureView)
                         }
                     })
+            }
+
+
+            if (isLockedOrientation) {
+                IconButton(
+                    onClick = {
+                        viewModel.updateLockedOrientation(false)
+                        showPlayerControls()
+                        context.findActivity().requestedOrientation =
+                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    },
+                    interactionSource = remember { NoIndicationInteractionSource() },
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .align(Alignment.TopStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = "Orientation rotate",
+                    )
+                }
             }
 
             if (doubleTapSeekDirection == SEEK_BACKWARD) {
@@ -579,7 +670,8 @@ fun VideoPlayerScreen(
 
             if (isLandscape()) {
                 AnimatedVisibility(
-                    visible = isControlsVisible, enter = fadeIn(
+                    visible = isControlsVisible,
+                    enter = fadeIn(
                         animationSpec = tween(durationMillis = 100)
                     ), exit = fadeOut(
                         animationSpec = tween(durationMillis = 500)
@@ -647,27 +739,81 @@ fun VideoPlayerScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                    contentDescription = if (isMuted) "Unmute" else "Mute",
-                                    modifier = Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null){
-                                        viewModel.toggleMute()
+
+                                IconButton(
+                                    onClick = viewModel::toggleMute,
+                                    interactionSource = remember { NoIndicationInteractionSource() }) {
+                                    Icon(
+                                        imageVector = if (isMuted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
+                                        contentDescription = if (isMuted) "Unmute" else "Mute"
+                                    )
+                                }
+
+                                if (isPlaying) {
+                                    IconButton(
+                                        onClick = {
+                                            context.findActivity()
+                                                .enterPictureInPictureMode(pipBuilder.build())
+                                        },
+                                        interactionSource = remember { NoIndicationInteractionSource() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.PictureInPictureAlt,
+                                            contentDescription = "Enter PiP mode"
+                                        )
                                     }
-                                )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        viewModel.updateLockedOrientation(true)
+                                        viewModel.hideControls()
+                                        context.findActivity().requestedOrientation =
+                                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                                    },
+                                    interactionSource = remember { NoIndicationInteractionSource() }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Lock,
+                                        contentDescription = "Orientation rotate",
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        val (newOrientation, newConfigOrientation) = when (orientation) {
+                                            Configuration.ORIENTATION_LANDSCAPE ->
+                                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT to Configuration.ORIENTATION_PORTRAIT
+
+                                            Configuration.ORIENTATION_PORTRAIT ->
+                                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE to Configuration.ORIENTATION_LANDSCAPE
+
+                                            else ->
+                                                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED to Configuration.ORIENTATION_UNDEFINED
+                                        }
+
+                                        lastOrientation = newConfigOrientation
+                                        context.findActivity().requestedOrientation = newOrientation
+                                    },
+                                    interactionSource = remember { NoIndicationInteractionSource() }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ScreenRotation,
+                                        contentDescription = "Orientation rotate",
+                                    )
+                                }
                             }
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     color = Color.White,
-                                    text = formatTimeSeconds(totalDurationMillis / 1000f),
+                                    text = formatTimeSeconds(totalDurationMillis / 1000f)
                                 )
 
                                 Slider(
@@ -743,7 +889,7 @@ fun VideoPlayerScreen(
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -847,20 +993,16 @@ fun isLandscape(): Boolean {
 
 @Composable
 fun rememberIsInPipMode(): Boolean {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val activity = LocalContext.current.findActivity() as ComponentActivity
-        var pipMode by remember { mutableStateOf(activity.isInPictureInPictureMode) }
-        DisposableEffect(activity) {
-            val observer = Consumer<PictureInPictureModeChangedInfo> { info ->
-                pipMode = info.isInPictureInPictureMode
-            }
-            activity.addOnPictureInPictureModeChangedListener(
-                observer
-            )
-            onDispose { activity.removeOnPictureInPictureModeChangedListener(observer) }
+    val activity = LocalContext.current.findActivity() as ComponentActivity
+    var pipMode by remember { mutableStateOf(activity.isInPictureInPictureMode) }
+    DisposableEffect(activity) {
+        val observer = Consumer<PictureInPictureModeChangedInfo> { info ->
+            pipMode = info.isInPictureInPictureMode
         }
-        return pipMode
-    } else {
-        return false
+        activity.addOnPictureInPictureModeChangedListener(
+            observer
+        )
+        onDispose { activity.removeOnPictureInPictureModeChangedListener(observer) }
     }
+    return pipMode
 }

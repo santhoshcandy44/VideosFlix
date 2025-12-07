@@ -62,6 +62,9 @@ class VideoPlayerViewModel
     private val _isMuted = MutableStateFlow(false)
     val isMuted = _isMuted.asStateFlow()
 
+    private val _isLockedOrientation = MutableStateFlow(false)
+    val isLockedOrientation = _isLockedOrientation.asStateFlow()
+
     private var progressJob: Job? = null
 
     val pipBuilder = PictureInPictureParams.Builder()
@@ -135,6 +138,15 @@ class VideoPlayerViewModel
     fun toggleMute() {
        _isMuted.value = !_isMuted.value
         exoPlayer.volume = if(_isMuted.value) 0f else 1f
+    }
+
+    fun setMuted(muted: Boolean) {
+        _isMuted.value = muted
+        exoPlayer.volume = if(muted) 0f else 1f
+    }
+
+    fun updateLockedOrientation(isLocked: Boolean) {
+        _isLockedOrientation.value = isLocked
     }
 
     fun seekForward(millis: Long = 10_000) {
