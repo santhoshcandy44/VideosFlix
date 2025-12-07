@@ -29,7 +29,8 @@ fun SafeDrawing(
     statusBarColor: Color = MaterialTheme.colorScheme.background,
     navigationBarColor: Color = MaterialTheme.colorScheme.background,
     isFullScreenMode: Boolean = false,
-    isNavigationBarContrastEnforced: Boolean=false,
+    isNavigationBarContrastEnforced: Boolean = false,
+    isImePaddingEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val window = LocalContext.current.findActivity().window
@@ -43,14 +44,15 @@ fun SafeDrawing(
                 .background(MaterialTheme.colorScheme.background)
                 .then(
                     if (!isFullScreenMode) Modifier.safeDrawingPadding() else Modifier
-                ).imePadding()
+                )
+                .then(if (isImePaddingEnabled) Modifier.imePadding() else Modifier)
         ) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 content()
             }
         }
 
-        if(!isFullScreenMode){
+        if (!isFullScreenMode) {
             Spacer(
                 modifier = Modifier
                     .windowInsetsTopHeight(WindowInsets.statusBars)
