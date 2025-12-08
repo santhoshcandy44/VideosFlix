@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun observeSystemVolume(
-    onVolumeChanged: (Int) -> Unit
+    onVolumeChanged: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -22,8 +22,9 @@ fun observeSystemVolume(
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
                 super.onChange(selfChange)
+                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                 val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                onVolumeChanged(currentVolume)
+                onVolumeChanged(maxVolume, currentVolume)
             }
         }
 
@@ -33,8 +34,9 @@ fun observeSystemVolume(
             observer
         )
 
+        val maxVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val initial = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        onVolumeChanged(initial)
+        onVolumeChanged(maxVolume, initial)
 
         onDispose {
             context.contentResolver.unregisterContentObserver(observer)

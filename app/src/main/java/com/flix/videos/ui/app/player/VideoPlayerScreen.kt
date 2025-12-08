@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +36,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Lock
@@ -46,6 +49,7 @@ import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -58,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,12 +78,15 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.core.graphics.toRect
@@ -118,6 +126,11 @@ const val EXTRA_CONTROL_PAUSE = 2
 //Close Player
 const val EXTRA_CONTROL_CLOSE = 3
 
+data class VerticalDragState(
+    val isDragging: Boolean = false,
+    val progress: Float = 0f
+)
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,7 +159,7 @@ fun VideoPlayerScreen(
 
     var lastOrientation by rememberSaveable { mutableStateOf(orientation) }
     var doubleTapSeekDirection by rememberSaveable {
-        androidx.compose.runtime.mutableIntStateOf(
+        mutableIntStateOf(
             ExoplayerSeekDirection.SEEK_NONE
         )
     }
@@ -231,12 +244,9 @@ fun VideoPlayerScreen(
             Lifecycle.Event.ON_STOP -> {
                 exoPlayer.pause()
             }
+
             else -> {}
         }
-    }
-
-    observeSystemVolume { volume ->
-        viewModel.setMuted(volume == 0)
     }
 
     LaunchedEffect(isPlaying) {
@@ -355,6 +365,16 @@ fun VideoPlayerScreen(
         }
     }
 
+    val density = LocalDensity.current
+    val verticalProgressBarSize = DpSize(24.dp, 160.dp)
+    val verticalProgressBarHeightPx = with(density) { verticalProgressBarSize.height.toPx() }
+    var volumeVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
+    var brightnessVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
+
+    observeSystemVolume { _, volume ->
+        viewModel.setMuted(volume == 0)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -383,6 +403,55 @@ fun VideoPlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                val isLeftSide = offset.x < size.width / 2
+                                val isBottom70 = offset.y > (size.height * 0.3f)
+                                if(isBottom70){
+                                    viewModel.hideControls()
+                                    if(isLeftSide){
+                                        volumeVerticalDragState = volumeVerticalDragState.copy(
+                                            isDragging = true,
+                                            progress = getCurrentVolume(context)
+                                        )
+                                    }else{
+                                        brightnessVerticalDragState = brightnessVerticalDragState.copy(
+                                            isDragging = true,
+                                            progress = getCurrentWindowBrightness(context)
+                                        )
+                                    }
+                                }
+                            },
+                            onDragEnd = {
+                                volumeVerticalDragState = volumeVerticalDragState.copy(
+                                    isDragging = false,
+                                )
+                                brightnessVerticalDragState = brightnessVerticalDragState.copy(
+                                    isDragging = false,
+                                )
+                            }
+                        ) { change, dragAmount ->
+                            if(volumeVerticalDragState.isDragging){
+                                change.consume()
+                                val percent = -dragAmount / verticalProgressBarHeightPx
+                                volumeVerticalDragState = volumeVerticalDragState.copy(
+                                    progress = (volumeVerticalDragState.progress + percent)
+                                        .coerceIn(0f, 1f)
+                                )
+                                setSystemVolume(context, volumeVerticalDragState.progress)
+                            }
+                            if(brightnessVerticalDragState.isDragging){
+                                change.consume()
+                                val percent = -dragAmount / verticalProgressBarHeightPx
+                                brightnessVerticalDragState = brightnessVerticalDragState.copy(
+                                    progress = (brightnessVerticalDragState.progress + percent)
+                                        .coerceIn(0f, 1f)
+                                )
+                                updateBrightness(context, brightnessVerticalDragState.progress)
+                            }
+                        }
+                    }
                     .pointerInput(isLockedOrientation) {
                         if (!isLockedOrientation) {
                             detectTapGestures(onDoubleTap = { offset ->
@@ -412,7 +481,6 @@ fun VideoPlayerScreen(
                                 cancelControlsHideJob()
                             })
                         }
-
                     }) {
                 AndroidView(
                     modifier = Modifier
@@ -446,7 +514,6 @@ fun VideoPlayerScreen(
                         }
                     })
             }
-
 
             if (isLockedOrientation) {
                 IconButton(
@@ -564,6 +631,91 @@ fun VideoPlayerScreen(
                 )
             }
 
+            if (volumeVerticalDragState.isDragging || brightnessVerticalDragState.isDragging) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.CenterStart)
+                ) {
+                    listOf(0, 1).forEach { index ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            if(volumeVerticalDragState.isDragging && index == 0){
+                                Column (
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .align(Alignment.Center),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    VerticalLinearProgressBar(
+                                        progress = volumeVerticalDragState.progress,
+                                        modifier = Modifier
+                                            .width(verticalProgressBarSize.width)
+                                            .height(verticalProgressBarSize.height),
+                                        trackColor = Color(0xFF6EE66E).copy(0.6f)
+                                    )
+                                    val percent = (volumeVerticalDragState.progress * 100).toInt()
+                                    if(percent > 0){
+                                        Text(
+                                            text = "${percent}%",
+                                            color = Color.White,
+                                            fontSize = 18.sp,
+                                            style = LocalTextStyle.current.copy(
+                                                platformStyle = PlatformTextStyle(
+                                                    includeFontPadding = false
+                                                )
+                                            )
+                                        )
+                                    }else{
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.VolumeOff,
+                                            contentDescription = "Muted",
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                            if (index == 1 && brightnessVerticalDragState.isDragging) {
+                                Column (
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .align(Alignment.Center),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    VerticalLinearProgressBar(
+                                        progress = brightnessVerticalDragState.progress,
+                                        trackColor = Color.Yellow.copy(0.6f) ,
+                                        modifier = Modifier
+                                            .width(verticalProgressBarSize.width)
+                                            .height(verticalProgressBarSize.height),
+                                    )
+                                    val percent = (brightnessVerticalDragState.progress * 100).toInt()
+                                    if(percent > 0){
+                                        Text(
+                                            text = "${percent}%",
+                                            color = Color.White,
+                                            fontSize = 18.sp,
+                                            style = LocalTextStyle.current.copy(
+                                                platformStyle = PlatformTextStyle(
+                                                    includeFontPadding = false
+                                                )
+                                            )
+                                        )
+                                    }else{
+                                        Icon(
+                                            imageVector = Icons.Filled.BrightnessLow,
+                                            contentDescription = "Muted",
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (isLandscape()) {
                 AnimatedVisibility(
                     visible = isControlsVisible,
@@ -652,7 +804,8 @@ fun VideoPlayerScreen(
                                     IconButton(
                                         onClick = {
                                             viewModel.hideControls()
-                                            context.findActivity().enterPictureInPictureMode(pipBuilder.build())
+                                            context.findActivity()
+                                                .enterPictureInPictureMode(pipBuilder.build())
                                         },
                                         interactionSource = remember { NoIndicationInteractionSource() }
                                     ) {
@@ -667,7 +820,8 @@ fun VideoPlayerScreen(
                                     onClick = {
                                         viewModel.hideControls()
                                         viewModel.updateLockedOrientation(true)
-                                        context.findActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                                        context.findActivity().requestedOrientation =
+                                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
                                     },
                                     interactionSource = remember { NoIndicationInteractionSource() }) {
                                     Icon(
