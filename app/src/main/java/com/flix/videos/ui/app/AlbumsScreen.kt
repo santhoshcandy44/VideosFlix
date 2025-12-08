@@ -1,4 +1,4 @@
-package com.lts360.test.videos.app
+package com.flix.videos.ui.app
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background

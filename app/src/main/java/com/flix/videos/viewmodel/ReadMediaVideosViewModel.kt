@@ -7,6 +7,7 @@ import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Size
 import androidx.lifecycle.ViewModel
@@ -49,11 +50,14 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
 
     val groupedVideos = _videoInfos
         .map { items ->
-            items.groupBy { File(it.path).parent ?: "Unknown" }
-                .mapValues { (parentPath, list) ->
+            items.groupBy { File(it.path).parent ?: "Unknown"}
+                .mapValues { (groupParent, list) ->
                     list.map { video ->
+                        val groupParentFile = File(groupParent)
+                        val absPath = groupParentFile.absolutePath
+                        val root = Environment.getExternalStorageDirectory().absolutePath
                         video.copy(
-                            displayGroupName = File(parentPath).name
+                            displayGroupName = if (absPath == root) "Root" else groupParentFile.name
                         )
                     }
                 }

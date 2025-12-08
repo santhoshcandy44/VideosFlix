@@ -18,7 +18,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.App.Starting">
+        android:theme="@style/Theme.App">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -26,7 +26,6 @@
             android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
@@ -35,10 +34,9 @@
             android:name=".ui.app.player.PlayerActivity"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="true"
-            android:theme="@style/Theme.PlayerActivity"
+            android:theme="@style/Theme.PlayerActivity.Starting"
             android:supportsPictureInPicture="true"
             android:resizeableActivity="true"
             />
     </application>
-
 </manifest>
