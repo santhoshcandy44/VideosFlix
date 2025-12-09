@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.media.MediaScannerConnection
+import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.ComponentActivity
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Forward10
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
@@ -407,8 +409,9 @@ fun VideoPlayerScreen(
                         detectVerticalDragGestures(
                             onDragStart = { offset ->
                                 val isLeftSide = offset.x < size.width / 2
-                                val isBottom70 = offset.y > (size.height * 0.3f)
-                                if(isBottom70){
+                                val isBottomAbove30 = offset.y > (size.height * 0.3f)
+                                val isBottomBelow30 = offset.y < (size.height * 0.7f)
+                                if(isBottomAbove30 && isBottomBelow30){
                                     viewModel.hideControls()
                                     if(isLeftSide){
                                         volumeVerticalDragState = volumeVerticalDragState.copy(
@@ -623,7 +626,8 @@ fun VideoPlayerScreen(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                    }, colors = TopAppBarDefaults.topAppBarColors(
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         titleContentColor = Color.White,
                         actionIconContentColor = Color.White
@@ -655,6 +659,7 @@ fun VideoPlayerScreen(
                                         trackColor = Color(0xFF6EE66E).copy(0.6f)
                                     )
                                     val percent = (volumeVerticalDragState.progress * 100).toInt()
+
                                     if(percent > 0){
                                         Text(
                                             text = "${percent}%",
