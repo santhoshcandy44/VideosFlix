@@ -30,7 +30,7 @@ import com.flix.videos.ui.app.bottombar.NavigationBarItemInfo
 import com.flix.videos.ui.app.bottombar.NavigationBarRoutes
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 import com.flix.videos.ui.utils.SwingEdgeToEdgeEffect
-import com.flix.videos.viewmodel.ReadMediaVideosViewModel
+import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

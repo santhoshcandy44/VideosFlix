@@ -57,6 +57,7 @@ fun VideosGrid(
                             Intent(context, PlayerActivity::class.java)
                                 .apply {
                                     data = videoInfo.uri
+                                    putExtra("video_id", videoInfo.id)
                                     putExtra("title", videoInfo.title)
                                     putExtra("video_width", videoInfo.width)
                                     putExtra("video_height", videoInfo.height)

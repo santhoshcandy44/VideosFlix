@@ -46,7 +46,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.flix.videos.R
 import com.flix.videos.models.VideoInfo
-import com.flix.videos.viewmodel.ReadMediaVideosViewModel
+import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

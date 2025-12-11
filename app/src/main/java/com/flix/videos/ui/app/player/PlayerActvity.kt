@@ -1,6 +1,9 @@
 package com.flix.videos.ui.app.player
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,12 +19,12 @@ class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvide
         super.onCreate(savedInstanceState)
         installSplashScreen()
         enableEdgeToEdge()
-        enterFullScreenMode(this)
         val uri = intent.data
         if (uri == null) {
             finish()
             return
         }
+        val videoId = intent.getLongExtra("video_id", -1)
         val title = intent.getStringExtra("title")
         val videoWidth = intent.getIntExtra("video_width", 0)
         val videoHeight = intent.getIntExtra("video_height", 0)
@@ -32,6 +35,7 @@ class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvide
                     VideoPlayerScreen(
                         viewModel = koinViewModel(parameters = {
                             parametersOf(
+                                videoId,
                                 uri.toString(),
                                 title ?: "",
                                 videoWidth,

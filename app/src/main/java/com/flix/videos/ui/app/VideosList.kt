@@ -72,7 +72,7 @@ import com.flix.videos.ui.app.player.PlayerActivity
 import com.flix.videos.ui.utils.FormatterUtils.formatHumanReadableBytesSize
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 import com.flix.videos.ui.utils.crop
-import com.flix.videos.viewmodel.ReadMediaVideosViewModel
+import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -142,6 +142,7 @@ fun VideosList(
                                 Intent(context, PlayerActivity::class.java)
                                     .apply {
                                         data = videoInfo.uri
+                                        putExtra("video_id", videoInfo.id)
                                         putExtra("title", videoInfo.title)
                                         putExtra("video_width", videoInfo.width)
                                         putExtra("video_height", videoInfo.height)

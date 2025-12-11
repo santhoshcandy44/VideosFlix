@@ -1,15 +1,13 @@
-package com.flix.videos.viewmodel
+package com.flix.videos.ui.app.viewmodel
 
-import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Size
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavBackStack
@@ -31,7 +29,7 @@ enum class ViewMode {
 }
 
 @KoinViewModel
-class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
+class ReadMediaVideosViewModel(val applicationContext: Context, val mediaSourceRepository: MediaSourceRepository) : ViewModel() {
     val videosBackstack = NavBackStack<NavKey>(NavigationBarRoutes.Videos)
     val albumsBackStack = NavBackStack<NavKey>(NavigationBarRoutes.Albums)
 
@@ -97,108 +95,14 @@ class ReadMediaVideosViewModel(val applicationContext: Context) : ViewModel() {
     }
 
     fun saveVideoViewMode(mode: ViewMode) {
-        sharedPrefs.edit().putString(KEY_VIEW_MODE, mode.name).apply()
+        sharedPrefs.edit { putString(KEY_VIEW_MODE, mode.name) }
         _videosViewMode.value = mode
     }
 
     fun fetchVideoInfos() {
         viewModelScope.launch {
-            _videoInfos.value = getAllVideos(applicationContext)
+            _videoInfos.value = mediaSourceRepository.getAllVideos()
         }
-    }
-
-    fun getAllVideos(context: Context): List<VideoInfo> {
-        val videos = mutableListOf<VideoInfo>()
-
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        }
-
-        val projection = arrayOf(
-            MediaStore.Video.Media._ID,
-            MediaStore.Video.Media.DISPLAY_NAME,
-            MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.WIDTH,
-            MediaStore.Video.Media.HEIGHT,
-            MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.DATA,
-            MediaStore.Video.Media.MIME_TYPE,
-            MediaStore.Video.Media.DATE_ADDED
-        )
-
-        val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
-
-        context.contentResolver.query(
-            collection,
-            projection,
-            null,
-            null,
-            sortOrder
-        )?.use { cursor ->
-
-            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-            val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-            val durCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
-            val widthCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
-            val heightCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
-            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
-            val mimetypeCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
-            val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-
-            while (cursor.moveToNext()) {
-                val id = cursor.getLong(idCol)
-                val displayName = cursor.getString(displayNameCol)
-                val duration = cursor.getLong(durCol)
-                val width = cursor.getInt(widthCol)
-                val height = cursor.getInt(heightCol)
-                val size = cursor.getLong(sizeCol)
-                val data = cursor.getString(dataCol)
-                val mimetype = cursor.getString(mimetypeCol)
-
-                val dateAdded = cursor.getLong(dateAddedCol)
-
-                val uri = ContentUris.withAppendedId(collection, id)
-
-                // FAST thumbnail
-                val thumbnail = try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        context.contentResolver.loadThumbnail(uri, Size(300, 300), null)
-                    } else {
-                        if (id == -1L)
-                            null
-                        else
-                            MediaStore.Images.Thumbnails.getThumbnail(
-                                context.contentResolver,
-                                id,
-                                MediaStore.Images.Thumbnails.MINI_KIND,
-                                null
-                            )
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-
-                videos.add(
-                    VideoInfo(
-                        uri,
-                        data,
-                        displayName,
-                        displayName.substringBeforeLast(".", ""),
-                        width,
-                        height,
-                        duration,
-                        size,
-                        mimetype,
-                        dateAdded,
-                        thumbnail
-                    )
-                )
-            }
-        }
-        return videos
     }
 
     fun renameVideo(
