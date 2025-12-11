@@ -3,29 +3,23 @@ package com.flix.videos.ui.app.player.viewmodel
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.net.Uri
-import android.provider.OpenableColumns
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
-import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.ConcatenatingMediaSource
-import androidx.media3.exoplayer.source.ConcatenatingMediaSource2
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
+import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
+import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
 import com.flix.videos.ui.app.viewmodel.MediaSourceRepository
 import com.flix.videos.ui.app.viewmodel.SubtitleFileInfo
 import kotlinx.coroutines.Job
@@ -63,7 +57,9 @@ class VideoPlayerViewModel
     @InjectedParam val videoWidth: Int,
     @InjectedParam val videoHeight: Int,
 //    @InjectedParam val totalDurationMillis: Long,
-    val mediaSourceRepository: MediaSourceRepository
+    val plaBackPosPrefs: PlaybackPosPrefs,
+    val mediaSourceRepository: MediaSourceRepository,
+    val playbackSettingsPrefs: PlaybackSettingsPrefs
 ) : ViewModel() {
     val videoUri: Uri = uri.toUri()
 
@@ -93,21 +89,25 @@ class VideoPlayerViewModel
 
     val pipBuilder = PictureInPictureParams.Builder()
 
-    private val _isAudioOnly = MutableStateFlow(false)
+    private val _isAudioOnly = MutableStateFlow(playbackSettingsPrefs.isAudioOnly())
     val isAudioOnly = _isAudioOnly.asStateFlow()
 
     val playBackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
-    private val _currentPlayPackSpeed = MutableStateFlow(1f)
+    private val _currentPlayPackSpeed = MutableStateFlow(playbackSettingsPrefs.getPlaybackSpeed())
     val currentPlayPackSpeed = _currentPlayPackSpeed.asStateFlow()
 
-    private val _currentRepeatMode = MutableStateFlow(ExoPlayerRepeatMode.REPEAT_MODE_OFF)
+    private val _currentRepeatMode = MutableStateFlow(playbackSettingsPrefs.getPlaybackMode())
     val currentRepeatMode = _currentRepeatMode.asStateFlow()
 
     val allVideos = mediaSourceRepository.getAllVideos()
 
     private val playListIndex = findVideoIndexById(id)
-    private val _currentPlayingVideoInfo = MutableStateFlow(allVideos[playListIndex])
+    private val _currentPlayingVideoInfo = MutableStateFlow(
+        allVideos.getOrElse(
+            playListIndex
+        ) { VideoInfo.EMPTY }
+    )
     val currentPlayingVideoInfo = _currentPlayingVideoInfo.asStateFlow()
 
     private val _currentAudioTrack = MutableStateFlow<AudioTrackInfo?>(null)
@@ -116,7 +116,7 @@ class VideoPlayerViewModel
     private val _localSubtitles = MutableStateFlow<List<SubtitleFileInfo>>(emptyList())
     val localSubtitles = _localSubtitles.asStateFlow()
 
-    private val _isSubtitleEnabled = MutableStateFlow(true)
+    private val _isSubtitleEnabled = MutableStateFlow(playbackSettingsPrefs.isSubtitlesEnabled())
     val isSubtitleEnabled = _isSubtitleEnabled.asStateFlow()
 
     private val _currentLocalSubtitle = MutableStateFlow<SubtitleFileInfo?>(null)
@@ -125,7 +125,8 @@ class VideoPlayerViewModel
     private val _currentSubtitleTrack = MutableStateFlow<SubtitleTrackInfo?>(null)
     val currentSubtitleTrack = _currentSubtitleTrack.asStateFlow()
 
-    private val defaultMediaSourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
+    private val defaultMediaSourceFactory =
+        DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
 
     init {
         val mediaSources = allVideos.map { videoInfo ->
@@ -145,8 +146,10 @@ class VideoPlayerViewModel
         exoPlayer.setMediaSources(
             mediaSources,
             playListIndex,
-            0
+            plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
         )
+        applyRepeatMode(_currentRepeatMode.value)
+        exoPlayer.setPlaybackSpeed(_currentPlayPackSpeed.value)
         exoPlayer.prepare()
         exoPlayer.play()
 
@@ -230,17 +233,23 @@ class VideoPlayerViewModel
 
     fun toggleAudioOnly() {
         _isAudioOnly.value = !_isAudioOnly.value
+        playbackSettingsPrefs.setAudioOnly(_isAudioOnly.value)
     }
 
     fun setCurrentPlayBackSpeed(speed: Float) {
         _currentPlayPackSpeed.value = speed
+        playbackSettingsPrefs.setPlaybackSpeed(speed)
         exoPlayer.setPlaybackSpeed(speed)
     }
 
     fun setCurrentPlayListRepeatMode(mode: ExoPlayerRepeatMode) {
         _currentRepeatMode.value = mode
-        when (mode) {
+        playbackSettingsPrefs.setPlaybackMode(mode)
+        applyRepeatMode(mode)
+    }
 
+    private fun applyRepeatMode(mode: ExoPlayerRepeatMode) {
+       return when (mode) {
             ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
                 exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
                 exoPlayer.shuffleModeEnabled = false
@@ -380,6 +389,7 @@ class VideoPlayerViewModel
             enableSubtitles()
         else
             disableSubtitles()
+        playbackSettingsPrefs.setSubtitlesEnabled(isChecked)
     }
 
     fun enableSubtitles() {
@@ -498,5 +508,20 @@ class VideoPlayerViewModel
     fun stopUpdatingProgress() {
         progressJob?.cancel()
         progressJob = null
+    }
+
+    fun saveMediaIemCurrentPosition() {
+        val configuration = exoPlayer.currentMediaItem?.localConfiguration
+        configuration?.let {
+            plaBackPosPrefs.savePosition(it.uri, exoPlayer.currentPosition)
+        }
+    }
+
+    fun getMediaIemLastPosition(uri: Uri): Long {
+        return plaBackPosPrefs.getPosition(uri)
+    }
+
+    fun clearMediaItemPosition(uri: Uri) {
+        plaBackPosPrefs.clearPosition(uri)
     }
 }

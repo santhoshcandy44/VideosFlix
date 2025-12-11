@@ -10,7 +10,6 @@ import android.view.TextureView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,7 +101,6 @@ data class VerticalDragState(
 fun VideoPlayerScreen(
     onPopUp: () -> Unit, viewModel: VideoPlayerViewModel, modifier: Modifier = Modifier
 ) {
-    val title = viewModel.title
     val videoUri = viewModel.videoUri
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
 
@@ -147,10 +145,15 @@ fun VideoPlayerScreen(
 
     val thumbSize = DpSize(14.dp, 14.dp)
     val trackHeight = 4.dp
-    val interactionSource = remember { MutableInteractionSource() }
 
     var autoHideJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
+    val isLandscape = isLandscape()
+
+    LaunchedEffect(isLandscape) {
+        if (isLandscape)
+            enterFullScreenMode(context.findActivity())
+    }
 
     fun cancelControlsHideJob() {
         autoHideJob?.cancel()
@@ -170,8 +173,11 @@ fun VideoPlayerScreen(
         createControlsHideJob()
     }
 
-    fun showPlayerControls() {
+    fun showPlayerControls(islad: Boolean) {
         viewModel.showControls()
+        if (!islad) {
+            exitFullScreenMode(context.findActivity())
+        }
         scheduleControlsHideJob()
     }
 
@@ -206,7 +212,7 @@ fun VideoPlayerScreen(
     }
 
     LifecycleResumeEffect(Unit) {
-        showPlayerControls()
+        showPlayerControls(isLandscape)
         onPauseOrDispose {}
     }
 
@@ -221,6 +227,7 @@ fun VideoPlayerScreen(
     observerLifeCycleEvent { event ->
         when (event) {
             Lifecycle.Event.ON_STOP -> {
+                viewModel.saveMediaIemCurrentPosition()
                 exoPlayer.pause()
             }
 
@@ -255,10 +262,28 @@ fun VideoPlayerScreen(
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 super.onMediaItemTransition(mediaItem, reason)
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    val previousIndex = exoPlayer.previousMediaItemIndex
+                    if (previousIndex != C.INDEX_UNSET) {
+                        val previousItem = exoPlayer.getMediaItemAt(previousIndex)
+                        val previousUri = previousItem.localConfiguration?.uri
+
+                        if (previousUri != null) {
+                            viewModel.clearMediaItemPosition(previousUri)
+                        }
+                    }
+                }
+
                 (mediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
                     viewModel.setCurrentPlayingVideoInfo(videoInfo)
                 }
-                Log.e("PLAYER", "Transition item changed")
+                mediaItem?.localConfiguration?.uri?.let { uri ->
+                    val pos = viewModel.getMediaIemLastPosition(uri)
+                    if (pos > 0L) {
+                        exoPlayer.seekTo(pos)
+                    }
+                }
+                Log.e("PLAYER", "Transition item changed $reason")
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -310,12 +335,12 @@ fun VideoPlayerScreen(
                     }
                 }
 
-                viewModel.setCurrentPlayingVideoInfo(
-                    currentPlayingVideoInfo.copy(
+                (exoPlayer.currentMediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
+                    viewModel.setCurrentPlayingVideoInfo(videoInfo.copy(
                         audioTrackInfos = audioTracks,
                         subtitleTrackInfos = subtitleTrackInfos
-                    )
-                )
+                    ))
+                }
                 viewModel.setCurrentAudioTrack()
                 viewModel.setCurrentSubtitleTrack()
                 Log.e("PLAYER", "On track changed")
@@ -376,6 +401,10 @@ fun VideoPlayerScreen(
                 else
                     viewModel.stopUpdatingProgress()
                 viewModel.onUpdateIsPlaying(isPlayingOnReady)
+
+                if (!isPlaying) {
+                    viewModel.saveMediaIemCurrentPosition()
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -534,7 +563,7 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                    .pointerInput(isLockedOrientation) {
+                    .pointerInput(isLockedOrientation, isLandscape) {
                         if (!isLockedOrientation) {
                             detectTapGestures(onDoubleTap = { offset ->
                                 val isLeftSide = offset.x < size.width / 2
@@ -557,7 +586,7 @@ fun VideoPlayerScreen(
                                     enterFullScreenMode(context.findActivity())
                                     viewModel.hideControls()
                                 } else {
-                                    showPlayerControls()
+                                    showPlayerControls(isLandscape)
                                 }
                             }, onPress = {
                                 cancelControlsHideJob()
@@ -621,7 +650,7 @@ fun VideoPlayerScreen(
                 LockedButton(
                     onClick = {
                         viewModel.updateLockedOrientation(false)
-                        showPlayerControls()
+                        showPlayerControls(isLandscape)
                         context.findActivity().requestedOrientation =
                             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     },
@@ -630,9 +659,13 @@ fun VideoPlayerScreen(
 
             TapToSeekController(doubleTapSeekDirection)
 
-            PlayerTopBar(title = title, isControlsVisible = isControlsVisible, onPopUp = onPopUp, onSubTitleSettingsClick = {
-                showSubtitleSettings = true
-            }) {
+            PlayerTopBar(
+                title = currentPlayingVideoInfo.title,
+                isControlsVisible = isControlsVisible,
+                onPopUp = onPopUp,
+                onSubTitleSettingsClick = {
+                    showSubtitleSettings = true
+                }) {
                 showMorePlayerSettings = true
             }
 
@@ -726,9 +759,9 @@ fun VideoPlayerScreen(
                 )
             }
 
-            if(showSubtitleSettings){
+            if (showSubtitleSettings) {
                 SubTitleSettingsMenu(
-                    isSubtitleEnabled = isSubtitleEnabled ,
+                    isSubtitleEnabled = isSubtitleEnabled,
                     subtitleTracks = currentPlayingVideoInfo.subtitleTrackInfos,
                     currentSubtitleTrack = currentSubtitleTrack,
                     localSubtitles = localSubtitles,

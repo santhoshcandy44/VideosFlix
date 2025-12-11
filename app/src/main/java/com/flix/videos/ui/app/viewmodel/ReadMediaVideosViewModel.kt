@@ -14,6 +14,7 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.bottombar.NavigationBarRoutes
+import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +30,10 @@ enum class ViewMode {
 }
 
 @KoinViewModel
-class ReadMediaVideosViewModel(val applicationContext: Context, val mediaSourceRepository: MediaSourceRepository) : ViewModel() {
+class ReadMediaVideosViewModel(
+    val applicationContext: Context,
+    val mediaSourceRepository: MediaSourceRepository
+) : ViewModel() {
     val videosBackstack = NavBackStack<NavKey>(NavigationBarRoutes.Videos)
     val albumsBackStack = NavBackStack<NavKey>(NavigationBarRoutes.Albums)
 
@@ -48,7 +52,7 @@ class ReadMediaVideosViewModel(val applicationContext: Context, val mediaSourceR
 
     val groupedVideos = _videoInfos
         .map { items ->
-            items.groupBy { File(it.path).parent ?: "Unknown"}
+            items.groupBy { File(it.path).parent ?: "Unknown" }
                 .mapValues { (groupParent, list) ->
                     list.map { video ->
                         val groupParentFile = File(groupParent)

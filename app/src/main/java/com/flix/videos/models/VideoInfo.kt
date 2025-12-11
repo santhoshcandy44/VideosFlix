@@ -21,5 +21,24 @@ data class VideoInfo(
     val displayGroupName:String = "",
     val audioTrackInfos: List<AudioTrackInfo> = emptyList(),
     val subtitleTrackInfos: List<SubtitleTrackInfo> = emptyList()
-
-)
+){
+    companion object {
+        val EMPTY  = VideoInfo(
+            id = 0L,
+            uri = Uri.EMPTY,
+            path = "",
+            displayName = "",
+            title = "",
+            width = 0,
+            height = 0,
+            duration = 0L,
+            size = 0L,
+            mimeType = "",
+            dateAdded = 0L,
+            thumbnail = null,
+            displayGroupName = "",
+            audioTrackInfos = emptyList(),
+            subtitleTrackInfos = emptyList()
+        )
+    }
+}
