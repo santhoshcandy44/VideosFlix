@@ -262,27 +262,37 @@ fun VideoPlayerScreen(
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 super.onMediaItemTransition(mediaItem, reason)
-                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
-                    val previousIndex = exoPlayer.previousMediaItemIndex
-                    if (previousIndex != C.INDEX_UNSET) {
-                        val previousItem = exoPlayer.getMediaItemAt(previousIndex)
-                        val previousUri = previousItem.localConfiguration?.uri
+                when (reason) {
+                    Player.MEDIA_ITEM_TRANSITION_REASON_AUTO -> {
+                        val previousIndex = exoPlayer.previousMediaItemIndex
 
-                        if (previousUri != null) {
-                            viewModel.clearMediaItemPosition(previousUri)
+                        if (previousIndex != C.INDEX_UNSET) {
+                            val prevItem = exoPlayer.getMediaItemAt(previousIndex)
+                            val prevUri = prevItem.localConfiguration?.uri
+                            if (prevUri != null) {
+                                viewModel.clearMediaItemPosition(prevUri)
+                            }
+                        }
+                    }
+
+                    Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> {
+                        val currentUri = mediaItem?.localConfiguration?.uri
+                        if (currentUri != null) {
+                            viewModel.clearMediaItemPosition(currentUri)
                         }
                     }
                 }
-
                 (mediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
                     viewModel.setCurrentPlayingVideoInfo(videoInfo)
                 }
+
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     val pos = viewModel.getMediaIemLastPosition(uri)
                     if (pos > 0L) {
-                        exoPlayer.seekTo(pos)
+                        exoPlayer.seekTo(exoPlayer.currentMediaItemIndex, pos)
                     }
                 }
+
                 Log.e("PLAYER", "Transition item changed $reason")
             }
 
