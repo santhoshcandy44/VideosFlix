@@ -492,11 +492,13 @@ class VideoPlayerViewModel
     }
 
     fun seekToNext() {
-        exoPlayer.seekToNext()
+        plaBackPosPrefs.savePosition(_currentPlayingVideoInfo.value.uri, exoPlayer.currentPosition)
+        exoPlayer.seekToNextMediaItem()
     }
 
     fun seekToPrevious() {
-        exoPlayer.seekToPrevious()
+        plaBackPosPrefs.savePosition(_currentPlayingVideoInfo.value.uri, exoPlayer.currentPosition)
+        exoPlayer.seekToPreviousMediaItem()
     }
 
     fun onFastSeekFinished() {

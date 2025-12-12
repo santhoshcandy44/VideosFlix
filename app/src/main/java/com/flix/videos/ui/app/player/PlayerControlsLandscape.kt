@@ -9,16 +9,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
@@ -48,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import com.flix.videos.R
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
-import com.flix.videos.ui.utils.findActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
