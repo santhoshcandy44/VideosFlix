@@ -12,10 +12,10 @@ import androidx.media3.ui.SubtitleView
 
 @OptIn(UnstableApi::class)
 @Composable
-fun SubTitleView(onSetView:SubtitleView.()-> Unit){
+fun SubTitleView(onSetView:SubtitleView.()-> Unit, modifier: Modifier = Modifier){
     val context = LocalContext.current
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         factory = {
             SubtitleView(context).apply {
                 onSetView()

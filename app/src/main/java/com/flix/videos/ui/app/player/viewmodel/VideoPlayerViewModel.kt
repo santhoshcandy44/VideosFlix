@@ -18,8 +18,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
+import com.flix.videos.ui.app.player.prefs.AudioTrackPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
+import com.flix.videos.ui.app.player.prefs.SubtitlePrefs
 import com.flix.videos.ui.app.viewmodel.MediaSourceRepository
 import com.flix.videos.ui.app.viewmodel.SubtitleFileInfo
 import kotlinx.coroutines.Job
@@ -57,9 +59,11 @@ class VideoPlayerViewModel
     @InjectedParam val videoWidth: Int,
     @InjectedParam val videoHeight: Int,
 //    @InjectedParam val totalDurationMillis: Long,
-    val plaBackPosPrefs: PlaybackPosPrefs,
     val mediaSourceRepository: MediaSourceRepository,
-    val playbackSettingsPrefs: PlaybackSettingsPrefs
+    val plaBackPosPrefs: PlaybackPosPrefs,
+    val subtitlePrefs: SubtitlePrefs,
+    val playbackSettingsPrefs: PlaybackSettingsPrefs,
+     val audioTrackPrefs: AudioTrackPrefs
 ) : ViewModel() {
     val videoUri: Uri = uri.toUri()
 
@@ -129,11 +133,23 @@ class VideoPlayerViewModel
         DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
 
     init {
+
         val mediaSources = allVideos.map { videoInfo ->
             defaultMediaSourceFactory.createMediaSource(
                 MediaItem.Builder()
                     .setUri(videoInfo.uri)
                     .setTag(videoInfo)
+                    .apply {
+                        subtitlePrefs.getSavedSubtitleUri(videoInfo.uri)?.let {
+                            val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(it)
+                                .setMimeType(mediaSourceRepository.detectSubtitleMimeType(it))  // auto-detect (SRT/ASS/VTT)
+                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                .setRoleFlags(C.ROLE_FLAG_CAPTION)
+                                .setLanguage("und")
+                                .build()
+                            setSubtitleConfigurations(listOf(subtitleConfig))
+                        }
+                    }
                     .build()
             )
         }
@@ -148,7 +164,15 @@ class VideoPlayerViewModel
             playListIndex,
             plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
         )
+        _currentLocalSubtitle.value =
+            subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)?.let {
+                mediaSourceRepository.getSubtitleInfoFromUri(it)
+            }
         applyRepeatMode(_currentRepeatMode.value)
+        if (_isSubtitleEnabled.value)
+            enableSubtitles()
+        else
+            disableSubtitles()
         exoPlayer.setPlaybackSpeed(_currentPlayPackSpeed.value)
         exoPlayer.prepare()
         exoPlayer.play()
@@ -249,7 +273,7 @@ class VideoPlayerViewModel
     }
 
     private fun applyRepeatMode(mode: ExoPlayerRepeatMode) {
-       return when (mode) {
+        return when (mode) {
             ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
                 exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
                 exoPlayer.shuffleModeEnabled = false
@@ -310,7 +334,6 @@ class VideoPlayerViewModel
 
     private fun getCurrentSubtitleTrack(): SubtitleTrackInfo? {
         val groups = exoPlayer.currentTracks.groups
-
         groups.forEachIndexed { groupIndex, group ->
             if (group.type == C.TRACK_TYPE_TEXT) {
                 for (trackIndex in 0 until group.length) {
@@ -332,19 +355,14 @@ class VideoPlayerViewModel
                 }
             }
         }
-
         return null
     }
 
-
     fun switchAudioTrack(
-        audioTrackInfo: AudioTrackInfo
+        groupIndex: Int,
+        trackIndex: Int
     ) {
-        val groupIndex = audioTrackInfo.groupIndex
-        val trackIndex = audioTrackInfo.trackIndex
-
-        val groups = exoPlayer.currentTracks.groups
-        val group = groups[groupIndex]
+        val group = exoPlayer.currentTracks.groups[groupIndex]
 
         val override = TrackSelectionOverride(
             group.mediaTrackGroup,
@@ -358,6 +376,7 @@ class VideoPlayerViewModel
             .build()
 
         exoPlayer.trackSelectionParameters = newParams
+        audioTrackPrefs.saveAudioTrack(_currentPlayingVideoInfo.value.uri, groupIndex, trackIndex)
     }
 
     fun switchSubTitleTrack(
@@ -366,8 +385,7 @@ class VideoPlayerViewModel
         val groupIndex = subtitleTrack.groupIndex
         val trackIndex = subtitleTrack.trackIndex
 
-        val groups = exoPlayer.currentTracks.groups
-        val group = groups[groupIndex]
+        val group = exoPlayer.currentTracks.groups[groupIndex]
 
         val override = TrackSelectionOverride(
             group.mediaTrackGroup,
@@ -381,6 +399,7 @@ class VideoPlayerViewModel
             .build()
 
         exoPlayer.trackSelectionParameters = newParams
+        subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
     }
 
     fun onSubtitleToggle(isChecked: Boolean) {
@@ -412,13 +431,11 @@ class VideoPlayerViewModel
 
     fun updateCurrentLocalSubtitle(subtitleFileInfo: SubtitleFileInfo) {
         _currentLocalSubtitle.value = subtitleFileInfo
-        applyLocalSubtitle(
-            _currentPlayingVideoInfo.value,
-            subtitleFileInfo.uri
-        )
+        applyLocalSubtitle(subtitleFileInfo.uri)
+        subtitlePrefs.saveSubtitleUri(_currentPlayingVideoInfo.value.uri, subtitleFileInfo.uri)
     }
 
-    fun applyLocalSubtitle(currentPlayingVideoInfo: VideoInfo, uri: Uri) {
+    private fun applyLocalSubtitle(uri: Uri) {
         val currentIndex = exoPlayer.currentMediaItemIndex
         val position = exoPlayer.currentPosition
         val playWhenReady = exoPlayer.playWhenReady
@@ -438,7 +455,7 @@ class VideoPlayerViewModel
                 .setUri(video.uri)
                 .setTag(video)
                 .apply {
-                    if (video.id == currentPlayingVideoInfo.id) {
+                    if (video.id == _currentPlayingVideoInfo.value.id) {
                         setSubtitleConfigurations(listOf(subtitleConfig))
                     }
                 }
@@ -523,5 +540,9 @@ class VideoPlayerViewModel
 
     fun clearMediaItemPosition(uri: Uri) {
         plaBackPosPrefs.clearPosition(uri)
+    }
+
+    fun getMediaIemAudioTrack(uri: Uri): Pair<Int, Int>? {
+        return audioTrackPrefs.getSavedAudioTrack(uri)
     }
 }

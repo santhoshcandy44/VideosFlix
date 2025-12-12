@@ -34,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toAndroidRectF
 import androidx.compose.ui.input.pointer.pointerInput
@@ -104,7 +105,7 @@ fun VideoPlayerScreen(
     val videoUri = viewModel.videoUri
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
 
-    var videoWidth by remember { mutableStateOf(0) }
+    var videoWidth by remember { mutableIntStateOf(0) }
     var videoHeight by remember { mutableStateOf(0) }
     val totalDurationMillis = currentPlayingVideoInfo.duration
 
@@ -150,6 +151,8 @@ fun VideoPlayerScreen(
     val scope = rememberCoroutineScope()
     val isLandscape = isLandscape()
 
+    var subtitlePadding by rememberSaveable { mutableStateOf(0) }
+
     LaunchedEffect(isLandscape) {
         if (isLandscape)
             enterFullScreenMode(context.findActivity())
@@ -168,17 +171,13 @@ fun VideoPlayerScreen(
         }
     }
 
-    fun scheduleControlsHideJob() {
+    fun showPlayerControls(isLandscape: Boolean, scheduleControlsHideJob: Boolean = true) {
         cancelControlsHideJob()
-        createControlsHideJob()
-    }
-
-    fun showPlayerControls(islad: Boolean) {
         viewModel.showControls()
-        if (!islad) {
+        if (!isLandscape)
             exitFullScreenMode(context.findActivity())
-        }
-        scheduleControlsHideJob()
+        if (scheduleControlsHideJob)
+            createControlsHideJob()
     }
 
     val isInPipMode = rememberIsInPipMode()
@@ -212,6 +211,7 @@ fun VideoPlayerScreen(
     }
 
     LifecycleResumeEffect(Unit) {
+        if (isLockedOrientation) return@LifecycleResumeEffect onPauseOrDispose {}
         showPlayerControls(isLandscape)
         onPauseOrDispose {}
     }
@@ -236,6 +236,12 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(isPlaying) {
+        if (!isPlaying) {
+            cancelControlsHideJob()
+            showPlayerControls(isLandscape, false)
+        } else
+            if (autoHideJob == null)
+                createControlsHideJob()
         if (isInPipMode) {
             context.findActivity().setPictureInPictureParams(updatePipActions().build())
         }
@@ -243,18 +249,6 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         val listener = object : Player.Listener {
-            /*  override fun onVideoSizeChanged(videoSize: VideoSize) {
-                              if (videoSize.width == 0 || videoSize.height == 0) return
-                              val rotation = exoPlayer.videoFormat?.rotationDegrees ?: 0
-                              val correctedWidth =
-                                  if (rotation == 90 || rotation == 270) videoSize.height else videoSize.width
-                              val correctedHeight =
-                                  if (rotation == 90 || rotation == 270) videoSize.width else videoSize.height
-
-                              videoWidth = correctedWidth
-                              videoHeight = correctedHeight
-                          }*/
-
             override fun onCues(cueGroup: CueGroup) {
                 super.onCues(cueGroup)
                 subtitleViewRef.get()?.setCues(cueGroup.cues)
@@ -265,21 +259,18 @@ fun VideoPlayerScreen(
                 when (reason) {
                     Player.MEDIA_ITEM_TRANSITION_REASON_AUTO -> {
                         val previousIndex = exoPlayer.previousMediaItemIndex
-
                         if (previousIndex != C.INDEX_UNSET) {
                             val prevItem = exoPlayer.getMediaItemAt(previousIndex)
                             val prevUri = prevItem.localConfiguration?.uri
-                            if (prevUri != null) {
+                            if (prevUri != null)
                                 viewModel.clearMediaItemPosition(prevUri)
-                            }
                         }
                     }
 
                     Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> {
                         val currentUri = mediaItem?.localConfiguration?.uri
-                        if (currentUri != null) {
+                        if (currentUri != null)
                             viewModel.clearMediaItemPosition(currentUri)
-                        }
                     }
                 }
                 (mediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
@@ -288,11 +279,9 @@ fun VideoPlayerScreen(
 
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     val pos = viewModel.getMediaIemLastPosition(uri)
-                    if (pos > 0L) {
+                    if (pos > 0L)
                         exoPlayer.seekTo(exoPlayer.currentMediaItemIndex, pos)
-                    }
                 }
-
                 Log.e("PLAYER", "Transition item changed $reason")
             }
 
@@ -301,9 +290,8 @@ fun VideoPlayerScreen(
                 val audioTracks = mutableListOf<AudioTrackInfo>()
                 tracks.groups.forEachIndexed { groupIndex, group ->
                     if (group.type == C.TRACK_TYPE_AUDIO) {
-                        val trackGroup = group.mediaTrackGroup
-                        for (tIndex in 0 until trackGroup.length) {
-                            val format = trackGroup.getFormat(tIndex)
+                        for (tIndex in 0 until group.length) {
+                            val format = group.mediaTrackGroup.getFormat(tIndex)
                             val displayLabel =
                                 if (format.language != null && format.label != null) {
                                     "${format.language}_${format.label}"
@@ -346,11 +334,18 @@ fun VideoPlayerScreen(
                 }
 
                 (exoPlayer.currentMediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
-                    viewModel.setCurrentPlayingVideoInfo(videoInfo.copy(
-                        audioTrackInfos = audioTracks,
-                        subtitleTrackInfos = subtitleTrackInfos
-                    ))
+                    viewModel.setCurrentPlayingVideoInfo(
+                        videoInfo.copy(
+                            audioTrackInfos = audioTracks,
+                            subtitleTrackInfos = subtitleTrackInfos
+                        )
+                    )
+
+                    viewModel.getMediaIemAudioTrack(videoInfo.uri)?.let {
+                        viewModel.switchAudioTrack(it.first, it.second)
+                    }
                 }
+
                 viewModel.setCurrentAudioTrack()
                 viewModel.setCurrentSubtitleTrack()
                 Log.e("PLAYER", "On track changed")
@@ -358,16 +353,16 @@ fun VideoPlayerScreen(
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 super.onVideoSizeChanged(videoSize)
-                videoWidth = 0
-                videoHeight = 0
-                Log.e("PLAYER", "On video size changed")
+                videoWidth = videoSize.width
+                videoHeight = videoSize.height
+                Log.e("PLAYER", "On video size changed ${videoSize.width}")
             }
 
             override fun onRenderedFirstFrame() {
                 super.onRenderedFirstFrame()
-                val size = exoPlayer.videoSize
-                videoWidth = size.width
-                videoHeight = size.height
+                /*  val size = exoPlayer.videoSize
+                  videoWidth = size.width
+                  videoHeight = size.height*/
                 Log.e("PLAYER", "First frame rendered")
             }
 
@@ -398,7 +393,15 @@ fun VideoPlayerScreen(
                     exoPlayer.stop()
                     exoPlayer.playWhenReady = false
                     textureView.keepScreenOn = false
-                    exoPlayer.seekTo(0)
+                    val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri
+                    if (currentUri != null)
+                        viewModel.clearMediaItemPosition(currentUri)
+                    val firstUri = exoPlayer.getMediaItemAt(0).localConfiguration?.uri
+                    val pos = if (firstUri != null)
+                        viewModel.getMediaIemLastPosition(firstUri)
+                    else
+                        0
+                    exoPlayer.seekTo(0, pos)
                     exoPlayer.prepare()
                     viewModel.onSliderValueChange(0f)
                 }
@@ -506,8 +509,8 @@ fun VideoPlayerScreen(
                         .then(
                             if (videoWidth > 0 && videoHeight > 0) Modifier.aspectRatio(
                                 videoWidth.toFloat() / videoHeight.toFloat()
-                            ) else Modifier.size(
-                                0.dp
+                            ) else Modifier.alpha(
+                                0f
                             )
                         ), factory = {
                         exoPlayer.setVideoTextureView(textureView)
@@ -619,9 +622,7 @@ fun VideoPlayerScreen(
                             .then(
                                 if (videoWidth > 0 && videoHeight > 0) Modifier.aspectRatio(
                                     videoWidth.toFloat() / videoHeight.toFloat()
-                                ) else Modifier.size(
-                                    0.dp
-                                )
+                                ) else Modifier.alpha(0f)
                             )
                             .onGloballyPositioned { layoutCoordinates ->
                                 val sourceRect =
@@ -650,9 +651,19 @@ fun VideoPlayerScreen(
                             }
                         })
 
-                    SubTitleView {
-                        subtitleViewRef.set(this)
-                    }
+                    SubTitleView(
+                        onSetView = {
+                            subtitleViewRef.set(this)
+                        },
+                        modifier = Modifier.then(
+                            if (isControlsVisible) Modifier.padding(
+                                bottom = with(
+                                    density
+                                ) {
+                                    subtitlePadding.toDp()
+                                }) else Modifier
+                        )
+                    )
                 }
             }
 
@@ -663,7 +674,7 @@ fun VideoPlayerScreen(
                         showPlayerControls(isLandscape)
                         context.findActivity().requestedOrientation =
                             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    },
+                    }
                 )
             }
 
@@ -696,7 +707,6 @@ fun VideoPlayerScreen(
                     thumbSize = thumbSize,
                     trackHeight = trackHeight,
                     orientation = orientation,
-                    lastOrientation = lastOrientation,
                     onSeekPrevious = viewModel::seekToPrevious,
                     onSeekNext = viewModel::seekToNext,
                     onPlayPauseToggle = viewModel::togglePlayPause,
@@ -717,11 +727,24 @@ fun VideoPlayerScreen(
                     onSliderChange = {
                         cancelControlsHideJob()
                         viewModel.onSliderValueChange(it)
+                        viewModel.onUpdateSliderValueChange(true)
                     },
                     onSliderFinished = {
-                        scheduleControlsHideJob()
+                        if (isPlaying) {
+                            createControlsHideJob()
+                        }
                         viewModel.onSliderValueChangeFinished()
-                    }
+                        viewModel.onUpdateSliderValueChange(false)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                        .onGloballyPositioned {
+                            subtitlePadding = it.size.height
+                        }
                 )
             } else {
                 PlayerControlsPortrait(
@@ -738,7 +761,9 @@ fun VideoPlayerScreen(
                         viewModel.onUpdateSliderValueChange(true)
                     },
                     onSliderChangeFinished = {
-                        scheduleControlsHideJob()
+                        if (isPlaying) {
+                            createControlsHideJob()
+                        }
                         viewModel.onSliderValueChangeFinished()
                         viewModel.onUpdateSliderValueChange(false)
                     },
@@ -749,7 +774,11 @@ fun VideoPlayerScreen(
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
+                        .padding(horizontal = 16.dp)
                         .padding(bottom = 32.dp)
+                        .onGloballyPositioned {
+                            subtitlePadding = it.size.height
+                        }
                 )
             }
 
@@ -765,7 +794,9 @@ fun VideoPlayerScreen(
                     onToggleAudioOnly = viewModel::toggleAudioOnly,
                     onSpeedSelected = viewModel::setCurrentPlayBackSpeed,
                     onRepeatModeSelected = viewModel::setCurrentPlayListRepeatMode,
-                    onAudioSelected = viewModel::switchAudioTrack,
+                    onAudioSelected = {
+                        viewModel.switchAudioTrack(it.groupIndex, it.trackIndex)
+                    }
                 )
             }
 

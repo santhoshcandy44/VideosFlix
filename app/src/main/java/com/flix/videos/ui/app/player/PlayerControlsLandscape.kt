@@ -52,7 +52,7 @@ import com.flix.videos.ui.utils.findActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoxScope.PlayerControlsLandscape(
+fun PlayerControlsLandscape(
     isVisible: Boolean,
     isPlaying: Boolean,
     isMuted: Boolean,
@@ -62,8 +62,6 @@ fun BoxScope.PlayerControlsLandscape(
     thumbSize: DpSize,
     trackHeight: Dp,
     orientation: Int,
-    lastOrientation: Int,
-    pipEnabled: Boolean = true,
     onSeekPrevious: () -> Unit,
     onSeekNext: () -> Unit,
     onPlayPauseToggle: () -> Unit,
@@ -73,7 +71,7 @@ fun BoxScope.PlayerControlsLandscape(
     onRotateOrientation: (newOrientation: Int, configOrientation: Int) -> Unit,
     onSliderChange: (Float) -> Unit,
     onSliderFinished: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     AnimatedVisibility(
@@ -82,66 +80,11 @@ fun BoxScope.PlayerControlsLandscape(
             animationSpec = tween(durationMillis = 100)
         ), exit = fadeOut(
             animationSpec = tween(durationMillis = 500)
-        ), modifier = Modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .align(Alignment.Center)
+        ), modifier = modifier
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.Center)
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onSeekPrevious,
-                    modifier = Modifier
-                        .size(60.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_video_backward),
-                        contentDescription = "Rewind 10s",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onPlayPauseToggle,
-                    modifier = Modifier.size(60.dp)
-                ) {
-                    Icon(
-                        painter = if (isPlaying) painterResource(R.drawable.ic_video_pause) else painterResource(
-                            R.drawable.ic_video_play
-                        ),
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onSeekNext,
-                    modifier = Modifier.size(60.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_video_forward),
-                        contentDescription = "Forward 10s",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-            }
-
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 24.dp),
+                    .fillMaxWidth(),
             ) {
                 Row(
                     modifier = Modifier
@@ -158,16 +101,14 @@ fun BoxScope.PlayerControlsLandscape(
                         )
                     }
 
-                    if (isPlaying) {
-                        IconButton(
-                            onClick = onEnterPip,
-                            interactionSource = remember { NoIndicationInteractionSource() }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.PictureInPictureAlt,
-                                contentDescription = "Enter PiP mode"
-                            )
-                        }
+                    IconButton(
+                        onClick = onEnterPip,
+                        interactionSource = remember { NoIndicationInteractionSource() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.PictureInPictureAlt,
+                            contentDescription = "Enter PiP mode"
+                        )
                     }
 
                     IconButton(
@@ -254,7 +195,51 @@ fun BoxScope.PlayerControlsLandscape(
                         text = formatTimeSeconds(currentDurationMillis / 1000f),
                     )
                 }
-            }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onSeekPrevious,
+                        modifier = Modifier
+                            .size(52.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_video_backward),
+                            contentDescription = "Rewind 10s",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onPlayPauseToggle,
+                        modifier = Modifier.size(52.dp)
+                    ) {
+                        Icon(
+                            painter = if (isPlaying) painterResource(R.drawable.ic_video_pause) else painterResource(
+                                R.drawable.ic_video_play
+                            ),
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onSeekNext,
+                        modifier = Modifier.size(52.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_video_forward),
+                            contentDescription = "Forward 10s",
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
         }
     }
 }

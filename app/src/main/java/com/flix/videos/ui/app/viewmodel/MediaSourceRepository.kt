@@ -183,6 +183,41 @@ class MediaSourceRepository(val applicationContext: Context) {
         return result
     }
 
+    fun getSubtitleInfoFromUri(uri: Uri): SubtitleFileInfo? {
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.MIME_TYPE,
+            MediaStore.Files.FileColumns.SIZE
+        )
+
+        applicationContext.contentResolver.query(
+            uri,
+            projection,
+            null,
+            null,
+            null
+        )?.use { cursor ->
+
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
+                val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME))
+                val mime = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE))
+                val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE))
+
+                return SubtitleFileInfo(
+                    id = id,
+                    uri = uri,
+                    name = name,
+                    mimeType = mime,
+                    size = size
+                )
+            }
+        }
+
+        return null
+    }
+
     fun detectSubtitleMimeType(uri: Uri): String {
          val resolverMime = applicationContext.contentResolver.getType(uri)
          if (!resolverMime.isNullOrEmpty()) return resolverMime

@@ -39,7 +39,7 @@ import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoxScope.PlayerControlsPortrait(
+fun PlayerControlsPortrait(
     isVisible: Boolean,
     sliderProgress: Float,
     totalDurationMillis: Long,
@@ -70,7 +70,7 @@ fun BoxScope.PlayerControlsPortrait(
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -124,9 +124,9 @@ fun BoxScope.PlayerControlsPortrait(
 
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.Center
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onSeekPrevious) {
                     Icon(
