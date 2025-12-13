@@ -161,7 +161,8 @@ class VideoPlayerViewModel
                 ?: emptyList() else allVideos
 
             val playItemIndex = findVideoIndexById(requiredVideos, videoParams.id)
-            _currentPlayingVideoInfo.value = requiredVideos.getOrElse(playItemIndex,
+            _currentPlayingVideoInfo.value = requiredVideos.getOrElse(
+                playItemIndex,
                 { VideoInfo.EMPTY })
             val mediaSources = requiredVideos.map { videoInfo ->
                 defaultMediaSourceFactory.createMediaSource(
@@ -398,8 +399,8 @@ class VideoPlayerViewModel
     fun switchAudioTrack(
         groupIndex: Int,
         trackIndex: Int
-    ) {
-        val group = exoPlayer.currentTracks.groups[groupIndex]
+    ): Boolean {
+        val group = exoPlayer.currentTracks.groups.getOrNull(groupIndex) ?: return false
 
         val override = TrackSelectionOverride(
             group.mediaTrackGroup,
@@ -414,15 +415,16 @@ class VideoPlayerViewModel
 
         exoPlayer.trackSelectionParameters = newParams
         audioTrackPrefs.saveAudioTrack(_currentPlayingVideoInfo.value.uri, groupIndex, trackIndex)
+        return true
     }
 
     fun switchSubTitleTrack(
         subtitleTrack: SubtitleTrackInfo
-    ) {
+    ): Boolean {
         val groupIndex = subtitleTrack.groupIndex
         val trackIndex = subtitleTrack.trackIndex
 
-        val group = exoPlayer.currentTracks.groups[groupIndex]
+        val group = exoPlayer.currentTracks.groups.getOrNull(groupIndex) ?: return false
 
         val override = TrackSelectionOverride(
             group.mediaTrackGroup,
@@ -437,6 +439,7 @@ class VideoPlayerViewModel
 
         exoPlayer.trackSelectionParameters = newParams
         subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
+        return true
     }
 
     fun onSubtitleToggle(isChecked: Boolean) {

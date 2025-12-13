@@ -133,7 +133,7 @@ fun VideoPlayerScreen(
     val currentLocalSubtitle by viewModel.currentLocalSubtitle.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    if(isLoading) return
+    if (isLoading) return
 
     val context = LocalContext.current
 
@@ -300,68 +300,66 @@ fun VideoPlayerScreen(
 
             override fun onTracksChanged(tracks: Tracks) {
                 super.onTracksChanged(tracks)
-                val audioTracks = mutableListOf<AudioTrackInfo>()
-                tracks.groups.forEachIndexed { groupIndex, group ->
-                    if (group.type == C.TRACK_TYPE_AUDIO) {
-                        for (tIndex in 0 until group.length) {
-                            val format = group.mediaTrackGroup.getFormat(tIndex)
-                            val displayLabel =
-                                if (format.language != null && format.label != null) {
-                                    "${format.language}_${format.label}"
-                                } else {
-                                    "Audio Track ${tIndex + 1}"
-                                }
-                            audioTracks.add(
-                                AudioTrackInfo(
-                                    groupIndex = groupIndex,
-                                    trackIndex = tIndex,
-                                    language = format.language,
-                                    label = displayLabel
+                if (tracks.groups.isNotEmpty()) {
+                    val audioTracks = mutableListOf<AudioTrackInfo>()
+                    tracks.groups.forEachIndexed { groupIndex, group ->
+                        if (group.type == C.TRACK_TYPE_AUDIO) {
+                            for (tIndex in 0 until group.length) {
+                                val format = group.mediaTrackGroup.getFormat(tIndex)
+                                val displayLabel =
+                                    if (format.language != null && format.label != null) {
+                                        "${format.language}_${format.label}"
+                                    } else {
+                                        "Audio Track ${tIndex + 1}"
+                                    }
+                                audioTracks.add(
+                                    AudioTrackInfo(
+                                        groupIndex = groupIndex,
+                                        trackIndex = tIndex,
+                                        language = format.language,
+                                        label = displayLabel
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
-                }
 
-                val subtitleTrackInfos = mutableListOf<SubtitleTrackInfo>()
-                tracks.groups.forEachIndexed { groupIndex, group ->
-                    if (group.type == C.TRACK_TYPE_TEXT) {
-                        for (trackIndex in 0 until group.length) {
-                            val format = group.mediaTrackGroup.getFormat(trackIndex)
-                            val displayLabel =
-                                if (format.language != null && format.label != null) {
-                                    "${format.language}_${format.label}"
-                                } else {
-                                    "Subtitle ${trackIndex + 1}"
-                                }
-                            subtitleTrackInfos.add(
-                                SubtitleTrackInfo(
-                                    groupIndex = groupIndex,
-                                    trackIndex = trackIndex,
-                                    language = format.language,
-                                    label = displayLabel
+                    val subtitleTrackInfos = mutableListOf<SubtitleTrackInfo>()
+                    tracks.groups.forEachIndexed { groupIndex, group ->
+                        if (group.type == C.TRACK_TYPE_TEXT) {
+                            for (trackIndex in 0 until group.length) {
+                                val format = group.mediaTrackGroup.getFormat(trackIndex)
+                                val displayLabel =
+                                    if (format.language != null && format.label != null) {
+                                        "${format.language}_${format.label}"
+                                    } else {
+                                        "Subtitle ${trackIndex + 1}"
+                                    }
+                                subtitleTrackInfos.add(
+                                    SubtitleTrackInfo(
+                                        groupIndex = groupIndex,
+                                        trackIndex = trackIndex,
+                                        language = format.language,
+                                        label = displayLabel
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
-                }
-
-                (exoPlayer.currentMediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
-                    viewModel.setCurrentPlayingVideoInfo(
-                        videoInfo.copy(
-                            audioTrackInfos = audioTracks,
-                            subtitleTrackInfos = subtitleTrackInfos
+                    (exoPlayer.currentMediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
+                        viewModel.setCurrentPlayingVideoInfo(
+                            videoInfo.copy(
+                                audioTrackInfos = audioTracks,
+                                subtitleTrackInfos = subtitleTrackInfos
+                            )
                         )
-                    )
-
-                    viewModel.getMediaIemAudioTrack(videoInfo.uri)?.let {
-                        viewModel.switchAudioTrack(it.first, it.second)
+                        viewModel.getMediaIemAudioTrack(videoInfo.uri)?.let {
+                            viewModel.switchAudioTrack(it.first, it.second)
+                        }
                     }
+                    viewModel.setCurrentAudioTrack()
+                    viewModel.setCurrentSubtitleTrack()
                 }
-
-                viewModel.setCurrentAudioTrack()
-                viewModel.setCurrentSubtitleTrack()
-                Log.e("PLAYER", "On track changed")
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -501,11 +499,11 @@ fun VideoPlayerScreen(
             .receiveAsFlow()
             .collectLatest {
                 volumeChangeState = volumeChangeState.copy(isDragging = true)
-                if(volumeChangeState.progress > 0){
-                    if(isMuted)
+                if (volumeChangeState.progress > 0) {
+                    if (isMuted)
                         viewModel.setMuted(false)
                 }
-                Log.e("Player","Changes ${volumeChangeState.progress}")
+                Log.e("Player", "Changes ${volumeChangeState.progress}")
 
                 hideVolumeChangeJob?.cancel()
                 hideVolumeChangeJob = null
@@ -516,9 +514,10 @@ fun VideoPlayerScreen(
             }
     }
 
-    observeVolumeChanges { _ , maxVolume, volume ->
+    observeVolumeChanges { _, maxVolume, volume ->
         viewModel.setMuted(volume == 0)
-            volumeChangeState = volumeChangeState.copy(progress = volume.toFloat()/maxVolume.toFloat())
+        volumeChangeState =
+            volumeChangeState.copy(progress = volume.toFloat() / maxVolume.toFloat())
     }
 
     var showSubtitleSettings by remember { mutableStateOf(false) }
