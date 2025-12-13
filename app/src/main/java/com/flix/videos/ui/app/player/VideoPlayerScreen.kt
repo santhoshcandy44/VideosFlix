@@ -718,8 +718,6 @@ fun VideoPlayerScreen(
                 )
             }
 
-            TapToSeekController(doubleTapSeekDirection)
-
             PlayerTopBar(
                 title = currentPlayingVideoInfo.title,
                 isControlsVisible = isControlsVisible,
@@ -787,7 +785,9 @@ fun VideoPlayerScreen(
                             subtitlePadding = it.size.height
                         }
                 )
-            } else {
+            }
+
+            else {
                 PlayerControlsPortrait(
                     isVisible = isControlsVisible,
                     sliderProgress = sliderProgress,
@@ -822,6 +822,8 @@ fun VideoPlayerScreen(
                         }
                 )
             }
+
+            TapToSeekController(doubleTapSeekDirection)
 
             if (showMorePlayerSettings) {
                 PlayerSettingsMenu(
