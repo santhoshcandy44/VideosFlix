@@ -18,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaSession
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
 import com.flix.videos.ui.app.player.prefs.AudioTrackPrefs
@@ -68,7 +69,14 @@ class VideoPlayerViewModel
     val playbackSettingsPrefs: PlaybackSettingsPrefs,
     val audioTrackPrefs: AudioTrackPrefs
 ) : ViewModel() {
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading = _isLoading.asStateFlow()
+
     val exoPlayer = ExoPlayer.Builder(applicationContext.applicationContext).build()
+        .apply {
+            setHandleAudioBecomingNoisy(true)
+        }
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -140,8 +148,10 @@ class VideoPlayerViewModel
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
 
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading = _isLoading.asStateFlow()
+    val mediaSession = MediaSession.Builder(applicationContext, exoPlayer)
+        .setId("headphone_session")
+        .build()
+
 
     init {
         viewModelScope.launch {
@@ -608,6 +618,8 @@ class VideoPlayerViewModel
     override fun onCleared() {
         super.onCleared()
         releaseLoudnessEnhancer()
+        mediaSession.release()
+        exoPlayer.release()
         applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
     }
 }

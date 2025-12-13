@@ -89,7 +89,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.8.0")
     implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
     implementation("androidx.media3:media3-exoplayer-smoothstreaming:1.8.0")
-    implementation("androidx.media3:media3-ui:1.3.1")
+    implementation("androidx.media3:media3-ui:1.8.0")
+    implementation("androidx.media3:media3-session:1.8.0")
 }
 
 ksp {

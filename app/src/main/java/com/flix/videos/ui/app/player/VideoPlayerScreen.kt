@@ -92,8 +92,12 @@ const val EXTRA_CONTROL_TYPE = "control_type"
 const val EXTRA_CONTROL_PLAY = 1
 const val EXTRA_CONTROL_PAUSE = 2
 
+const val EXTRA_CONTROL_FORWARD = 3
+
+const val EXTRA_CONTROL_BACKWARD = 4
+
 //Close Player
-const val EXTRA_CONTROL_CLOSE = 3
+const val EXTRA_CONTROL_CLOSE = 0
 
 data class VerticalDragState(
     val progress: Float = 0f,
@@ -213,6 +217,26 @@ fun VideoPlayerScreen(
                     )
                 )
             }
+
+            add(
+                createPipAction(
+                    context = context,
+                    iconRes = R.drawable.ic_video_forward,
+                    title = "Forward",
+                    requestCode = EXTRA_CONTROL_FORWARD,
+                    controlType = EXTRA_CONTROL_FORWARD
+                )
+            )
+
+            add(
+                createPipAction(
+                    context = context,
+                    iconRes = R.drawable.ic_video_backward,
+                    title = "Backward",
+                    requestCode = EXTRA_CONTROL_BACKWARD,
+                    controlType = EXTRA_CONTROL_BACKWARD
+                )
+            )
         }
         return pipBuilder.setActions(actions)
     }
@@ -470,6 +494,14 @@ fun VideoPlayerScreen(
 
             EXTRA_CONTROL_PLAY -> {
                 exoPlayer.play()
+            }
+
+            EXTRA_CONTROL_FORWARD ->{
+                exoPlayer.seekToNextMediaItem()
+            }
+
+            EXTRA_CONTROL_BACKWARD ->{
+                exoPlayer.seekToPreviousMediaItem()
             }
 
             EXTRA_CONTROL_CLOSE -> {
@@ -785,9 +817,7 @@ fun VideoPlayerScreen(
                             subtitlePadding = it.size.height
                         }
                 )
-            }
-
-            else {
+            } else {
                 PlayerControlsPortrait(
                     isVisible = isControlsVisible,
                     sliderProgress = sliderProgress,

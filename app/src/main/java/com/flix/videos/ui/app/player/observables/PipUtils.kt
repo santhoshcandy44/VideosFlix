@@ -17,6 +17,26 @@ import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
 import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
 import com.flix.videos.ui.utils.findActivity
 
+@Composable
+fun observeUserLeaveHint(onUserLeave: () -> Unit) {
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val activity = context.findActivity() as ComponentActivity
+
+        val onUserLeaveBehavior = Runnable {
+            onUserLeave()
+        }
+
+        activity.addOnUserLeaveHintListener(
+            onUserLeaveBehavior
+        )
+        onDispose {
+            activity.removeOnUserLeaveHintListener(
+                onUserLeaveBehavior
+            )
+        }
+    }
+}
 
 fun createPipAction(
     context:Context,
@@ -43,27 +63,6 @@ fun createPipAction(
         title,
         pendingIntent
     )
-}
-
-@Composable
-fun observeUserLeaveHint(onUserLeave: () -> Unit) {
-    val context = LocalContext.current
-    DisposableEffect(context) {
-        val activity = context.findActivity() as ComponentActivity
-
-        val onUserLeaveBehavior = Runnable {
-            onUserLeave()
-        }
-
-        activity.addOnUserLeaveHintListener(
-            onUserLeaveBehavior
-        )
-        onDispose {
-            activity.removeOnUserLeaveHintListener(
-                onUserLeaveBehavior
-            )
-        }
-    }
 }
 
 @Composable
