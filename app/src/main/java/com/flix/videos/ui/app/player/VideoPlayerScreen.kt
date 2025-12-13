@@ -77,7 +77,10 @@ import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
 import com.flix.videos.ui.utils.findActivity
 import com.flix.videos.ui.utils.shortToast
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.absoluteValue
@@ -102,6 +105,7 @@ data class VerticalDragState(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
+    volumeKeyChannel: Channel<Int>,
     onPopUp: () -> Unit, viewModel: VideoPlayerViewModel, modifier: Modifier = Modifier
 ) {
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
@@ -478,30 +482,36 @@ fun VideoPlayerScreen(
     val density = LocalDensity.current
     val verticalProgressBarSize = DpSize(24.dp, 160.dp)
     val verticalProgressBarHeightPx = with(density) { verticalProgressBarSize.height.toPx() }
-    var verticalProgressBarDragSize by remember { mutableFloatStateOf(0f) }
 
     var volumeChangeState by remember { mutableStateOf(VerticalDragState()) }
     var volumeVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
     var brightnessVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
     var hideVolumeChangeJob by remember { mutableStateOf<Job?>(null) }
 
+    LaunchedEffect(Unit) {
+        volumeKeyChannel
+            .receiveAsFlow()
+            .collectLatest {
+                volumeChangeState = volumeChangeState.copy(isDragging = true)
+                if(volumeChangeState.progress > 0){
+                    if(isMuted)
+                        viewModel.setMuted(false)
+                }
+                Log.e("Player","Changes ${volumeChangeState.progress}")
+
+                hideVolumeChangeJob?.cancel()
+                hideVolumeChangeJob = null
+                hideVolumeChangeJob = coroutineScope.launch {
+                    delay(3000)
+                    volumeChangeState = volumeChangeState.copy(isDragging = false)
+                }
+            }
+    }
+
     observeVolumeChanges { isInitial, maxVolume, volume ->
         viewModel.setMuted(volume == 0)
-        Log.e("Player", "Called $maxVolume $volume")
-        if (!isInitial && !volumeVerticalDragState.isDragging) {
-            Log.e("Player", "Called 1")
-            val progress = (volume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
-            volumeChangeState = volumeChangeState.copy(
-                isDragging = true,
-                progress = progress,
-            )
-            hideVolumeChangeJob?.cancel()
-            hideVolumeChangeJob = null
-            hideVolumeChangeJob = coroutineScope.launch {
-                delay(3000)
-                volumeChangeState = volumeChangeState.copy(isDragging = false)
-            }
-        }
+        if(!isInitial)
+            volumeChangeState = volumeChangeState.copy(progress = volume.toFloat()/maxVolume.toFloat(),)
     }
 
     var showSubtitleSettings by remember { mutableStateOf(false) }
@@ -551,7 +561,6 @@ fun VideoPlayerScreen(
                                 val isLeftSide = offset.x < size.width / 2
                                 val isBottomAbove30 = offset.y > (size.height * 0.3f)
                                 val isBottomBelow30 = offset.y < (size.height * 0.7f)
-                                verticalProgressBarDragSize = verticalProgressBarHeightPx
                                 if (isBottomAbove30 && isBottomBelow30) {
                                     viewModel.hideControls()
                                     if (isLeftSide) {
@@ -581,7 +590,7 @@ fun VideoPlayerScreen(
                                 )
                             }
                         ) { change, dragAmount ->
-                            if(dragAmount.absoluteValue < 3f) return@detectVerticalDragGestures
+                            if (dragAmount.absoluteValue < 3f) return@detectVerticalDragGestures
                             if (volumeVerticalDragState.isDragging) {
                                 change.consume()
                                 val percent = -dragAmount / verticalProgressBarHeightPx

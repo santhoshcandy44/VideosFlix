@@ -1,18 +1,25 @@
 package com.flix.videos.ui.app.player
 
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.app.OnPictureInPictureModeChangedProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.theme.AppTheme
 import com.flix.videos.ui.utils.SafeDrawing
+import kotlinx.coroutines.channels.Channel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvider {
+
+class PlayerActivity : ComponentActivity() {
+    val volumeKeyChannel = Channel<Int>(
+        capacity = Channel.BUFFERED
+    )
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installSplashScreen()
@@ -32,6 +39,7 @@ class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvide
             AppTheme {
                 SafeDrawing(isFullScreenMode = true) {
                     VideoPlayerScreen(
+                        volumeKeyChannel = volumeKeyChannel,
                         viewModel = koinViewModel(parameters = {
                             parametersOf(
                                 VideoParams(
@@ -46,5 +54,18 @@ class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvide
                 }
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                volumeKeyChannel.trySend(1)
+            }
+
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                volumeKeyChannel.trySend(-1)
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }
