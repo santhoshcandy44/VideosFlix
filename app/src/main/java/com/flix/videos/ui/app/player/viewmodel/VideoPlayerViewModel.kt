@@ -4,6 +4,7 @@ import android.app.PictureInPictureParams
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.provider.MediaStore
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
@@ -146,6 +147,10 @@ class VideoPlayerViewModel
     private val defaultMediaSourceFactory =
         DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
 
+    val subtitleObserver = SubtitleFilesObserver(applicationContext) {
+        _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
+    }
+
     init {
         val mediaSources = requiredVideos.map { videoInfo ->
             defaultMediaSourceFactory.createMediaSource(
@@ -193,6 +198,12 @@ class VideoPlayerViewModel
         viewModelScope.launch {
             _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
         }
+
+        applicationContext.contentResolver.registerContentObserver(
+            MediaStore.Files.getContentUri("external"),
+            true,
+            subtitleObserver
+        )
     }
 
     fun findVideoIndexById(videos:List<VideoInfo>, videoId: Long): Int {
@@ -559,5 +570,10 @@ class VideoPlayerViewModel
 
     fun getMediaIemAudioTrack(uri: Uri): Pair<Int, Int>? {
         return audioTrackPrefs.getSavedAudioTrack(uri)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
     }
 }
