@@ -5,9 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -44,11 +46,12 @@ import androidx.compose.ui.window.PopupProperties
 import com.flix.videos.ui.app.player.common.isLandscape
 import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 import com.flix.videos.ui.app.viewmodel.SubtitleFileInfo
+import com.flix.videos.ui.utils.noRippleClickable
 
 @Composable
 fun SubTitleSettingsMenu(
     isSubtitleEnabled: Boolean,
-    onSubtitleToggle:(Boolean) -> Unit,
+    onSubtitleToggle: (Boolean) -> Unit,
     subtitleTracks: List<SubtitleTrackInfo>,
     currentSubtitleTrack: SubtitleTrackInfo?,
     localSubtitles: List<SubtitleFileInfo>,
@@ -56,53 +59,59 @@ fun SubTitleSettingsMenu(
     onDismiss: () -> Unit,
     onSubtitleSelected: (SubtitleTrackInfo) -> Unit,
     onLocalSubtitleSelected: (SubtitleFileInfo) -> Unit
-    ) {
+) {
     Popup(
         alignment = Alignment.Center,
-        properties = PopupProperties(
-            flags = WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
-            excludeFromSystemGesture = true,
-        ),
         onDismissRequest = onDismiss
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth(if (isLandscape()) 0.5f else 0.9f)
-                .fillMaxHeight(if (isLandscape()) 0.9f else 0.5f)
-                .background(Color.Black.copy(0.6f))
-                .border(1.dp, Color.Magenta.copy(0.6f))
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .fillMaxSize()
+                .noRippleClickable {
+                    onDismiss()
+                },
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(if (isLandscape()) 0.5f else 0.9f)
+                    .fillMaxHeight(if (isLandscape()) 0.9f else 0.5f)
+                    .background(Color.Black.copy(0.6f))
+                    .border(1.dp, Color.Magenta.copy(0.6f))
+                    .verticalScroll(rememberScrollState())
+                    .noRippleClickable {}
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "Subtitles/CC",
-                    fontSize = 16.sp,
-                    color = Color.White
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Subtitles/CC",
+                        fontSize = 16.sp,
+                        color = Color.White
+                    )
 
-                Switch(
-                    checked = isSubtitleEnabled,
-                    onCheckedChange = onSubtitleToggle
-                )
-            }
+                    Switch(
+                        checked = isSubtitleEnabled,
+                        onCheckedChange = onSubtitleToggle
+                    )
+                }
 
-            if(isSubtitleEnabled){
-                SubTitleSettings(
-                    subTitleTracks = subtitleTracks,
-                    currentTrack = currentSubtitleTrack,
-                    onSubtitleSelected = onSubtitleSelected
-                )
+                if (isSubtitleEnabled) {
+                    SubTitleSettings(
+                        subTitleTracks = subtitleTracks,
+                        currentTrack = currentSubtitleTrack,
+                        onSubtitleSelected = onSubtitleSelected
+                    )
 
-                LocalSubtitles(
-                    localSubtitles = localSubtitles,
-                    currentLocalSubtitle = currentLocalSubtitle,
-                            onLocalSubtitleSelected = onLocalSubtitleSelected
-                )
+                    LocalSubtitles(
+                        localSubtitles = localSubtitles,
+                        currentLocalSubtitle = currentLocalSubtitle,
+                        onLocalSubtitleSelected = onLocalSubtitleSelected
+                    )
+                }
             }
         }
     }
@@ -127,12 +136,12 @@ private fun SubTitleSettings(
             style = MaterialTheme.typography.bodyLarge
         )
 
-        if(subTitleTracks.isEmpty()){
+        if (subTitleTracks.isEmpty()) {
             Text(
                 text = "No subtitle/cc track found.",
                 style = MaterialTheme.typography.bodyMedium
             )
-        }else{
+        } else {
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = {
@@ -172,14 +181,14 @@ private fun SubTitleSettings(
                                 currentTrack.trackIndex == track.trackIndex
                         DropdownMenuItem(
                             trailingIcon = {
-                                if(isSelected){
+                                if (isSelected) {
                                     Icon(Icons.Default.Check, contentDescription = null)
                                 }
                             },
                             text = {
                                 Text(
                                     text = track.label ?: "Unknown",
-                                    color =  Color.White,
+                                    color = Color.White,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             },
@@ -217,13 +226,13 @@ private fun LocalSubtitles(
             style = MaterialTheme.typography.bodyLarge
         )
 
-        if(localSubtitles.isEmpty()){
+        if (localSubtitles.isEmpty()) {
             Text(
                 text = "No local subtitles/cc found.",
                 style = MaterialTheme.typography.bodyMedium
             )
-        }else{
-            Column (modifier = Modifier.fillMaxWidth()) {
+        } else {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = currentLocalSubtitle?.name ?: "Select Local Subtitle/CC",
                     modifier = Modifier
@@ -238,13 +247,14 @@ private fun LocalSubtitles(
                                 end = Offset(x = width, y = height),
                                 strokeWidth = strokeWidthPx
                             )
-                        }.clickable{
+                        }
+                        .clickable {
                             expanded = !expanded
                         },
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                if(expanded){
+                if (expanded) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -1,15 +1,13 @@
 package com.flix.videos.ui.app.player
 
-import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.app.OnPictureInPictureModeChangedProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.flix.videos.ui.theme.SuperBosTheme
+import com.flix.videos.ui.app.player.viewmodel.VideoParams
+import com.flix.videos.ui.theme.AppTheme
 import com.flix.videos.ui.utils.SafeDrawing
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -24,23 +22,22 @@ class PlayerActivity : ComponentActivity(), OnPictureInPictureModeChangedProvide
             finish()
             return
         }
+        val group = intent.getStringExtra("group")
         val videoId = intent.getLongExtra("video_id", -1)
         val title = intent.getStringExtra("title")
         val videoWidth = intent.getIntExtra("video_width", 0)
         val videoHeight = intent.getIntExtra("video_height", 0)
         val totalDurationMillis = intent.getLongExtra("total_duration", 0L)
         setContent {
-            SuperBosTheme {
+            AppTheme {
                 SafeDrawing(isFullScreenMode = true) {
                     VideoPlayerScreen(
                         viewModel = koinViewModel(parameters = {
                             parametersOf(
-                                videoId,
-                                uri.toString(),
-                                title ?: "",
-                                videoWidth,
-                                videoHeight,
-                                totalDurationMillis
+                                VideoParams(
+                                    group = group,
+                                    id = videoId
+                                )
                             )
                         }),
                         onPopUp = {

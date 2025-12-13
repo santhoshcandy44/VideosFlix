@@ -169,7 +169,6 @@ private fun FourColumnGrid(
     }
 }
 
-
 @Composable
 private fun CountBadge(
     text: String,
@@ -187,4 +186,3 @@ private fun CountBadge(
         )
     }
 }
-

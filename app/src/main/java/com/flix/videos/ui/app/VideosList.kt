@@ -65,14 +65,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.flix.videos.models.VideoInfo
-import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_CLOSE
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
-import com.flix.videos.ui.app.player.PlayerActivity
+import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.utils.FormatterUtils.formatHumanReadableBytesSize
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 import com.flix.videos.ui.utils.crop
-import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -82,7 +78,8 @@ import java.util.Locale
 fun VideosList(
     videInfos: List<VideoInfo>,
     viewModel: ReadMediaVideosViewModel,
-    modifier: Modifier = Modifier,
+    onItemClick:(VideoInfo)-> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
@@ -133,23 +130,8 @@ fun VideosList(
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() }) {
-                            val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-                                `package` = context.packageName
-                                putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
-                            }
-                            context.sendBroadcast(intent)
-                            context.startActivity(
-                                Intent(context, PlayerActivity::class.java)
-                                    .apply {
-                                        data = videoInfo.uri
-                                        putExtra("video_id", videoInfo.id)
-                                        putExtra("title", videoInfo.title)
-                                        putExtra("video_width", videoInfo.width)
-                                        putExtra("video_height", videoInfo.height)
-                                        putExtra("total_duration", videoInfo.duration)
-                                    })
+                          onItemClick(videoInfo)
                         }) {
-
 
                     videoInfo.thumbnail?.let {
                         Image(

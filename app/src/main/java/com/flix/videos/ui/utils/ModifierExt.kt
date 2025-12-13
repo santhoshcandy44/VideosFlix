@@ -1,5 +1,9 @@
 package com.flix.videos.ui.utils
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
@@ -17,4 +21,5 @@ fun Modifier.crop(horizontal: Dp = 0.dp, vertical: Dp = 0.dp) =
         }
     }
 
-
+@Composable
+fun Modifier.noRippleClickable(onClick:()-> Unit) = this.clickable(onClick = onClick, interactionSource = remember { MutableInteractionSource() }, indication = null)

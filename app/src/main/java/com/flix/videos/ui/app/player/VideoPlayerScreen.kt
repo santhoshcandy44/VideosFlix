@@ -66,8 +66,8 @@ import com.flix.videos.ui.app.player.common.isLandscape
 import com.flix.videos.ui.app.player.common.rememberIsInPipMode
 import com.flix.videos.ui.app.player.observables.createPipAction
 import com.flix.videos.ui.app.player.observables.observePipRemoteActions
-import com.flix.videos.ui.app.player.observables.observeSystemVolume
 import com.flix.videos.ui.app.player.observables.observeUserLeaveHint
+import com.flix.videos.ui.app.player.observables.observeVolumeChanges
 import com.flix.videos.ui.app.player.observables.observerLifeCycleEvent
 import com.flix.videos.ui.app.player.observables.rememberDeviceOrientationFlow
 import com.flix.videos.ui.app.player.viewmodel.AudioTrackInfo
@@ -79,6 +79,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.absoluteValue
 
 // Constant for broadcast receiver
 const val ACTION_BROADCAST_CONTROL = "PRIVATE_PLAYER_BROADCAST"
@@ -92,8 +93,8 @@ const val EXTRA_CONTROL_PAUSE = 2
 const val EXTRA_CONTROL_CLOSE = 3
 
 data class VerticalDragState(
-    val isDragging: Boolean = false,
-    val progress: Float = 0f
+    val progress: Float = 0f,
+    val isDragging: Boolean = false
 )
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -102,7 +103,6 @@ data class VerticalDragState(
 fun VideoPlayerScreen(
     onPopUp: () -> Unit, viewModel: VideoPlayerViewModel, modifier: Modifier = Modifier
 ) {
-    val videoUri = viewModel.videoUri
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
 
     var videoWidth by remember { mutableIntStateOf(0) }
@@ -148,7 +148,7 @@ fun VideoPlayerScreen(
     val trackHeight = 4.dp
 
     var autoHideJob by remember { mutableStateOf<Job?>(null) }
-    val scope = rememberCoroutineScope()
+    val coroutineScope = rememberCoroutineScope()
     val isLandscape = isLandscape()
 
     var subtitlePadding by rememberSaveable { mutableStateOf(0) }
@@ -164,7 +164,7 @@ fun VideoPlayerScreen(
     }
 
     fun createControlsHideJob(timeMillis: Long = 5000) {
-        autoHideJob = scope.launch {
+        autoHideJob = coroutineScope.launch {
             delay(timeMillis)
             enterFullScreenMode(context.findActivity())
             viewModel.hideControls()
@@ -424,7 +424,7 @@ fun VideoPlayerScreen(
                 super.onPlayerError(error)
                 shortToast(context, "Can't play this video, open with other app")
                 MediaScannerConnection.scanFile(
-                    context, arrayOf(videoUri.path), null
+                    context, arrayOf(currentPlayingVideoInfo.uri.path), null
                 ) { _, uri ->
                     val shareIntent = Intent(
                         Intent.ACTION_VIEW
@@ -477,11 +477,30 @@ fun VideoPlayerScreen(
     val density = LocalDensity.current
     val verticalProgressBarSize = DpSize(24.dp, 160.dp)
     val verticalProgressBarHeightPx = with(density) { verticalProgressBarSize.height.toPx() }
+    var verticalProgressBarDragSize by remember { mutableStateOf(0f) }
+
+    var volumeChangeState by remember { mutableStateOf(VerticalDragState()) }
     var volumeVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
     var brightnessVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
+    var hideVolumeChangeJob by remember { mutableStateOf<Job?>(null) }
 
-    observeSystemVolume { _, volume ->
+    observeVolumeChanges { isInitial, maxVolume, volume ->
         viewModel.setMuted(volume == 0)
+        Log.e("Player", "Called $maxVolume $volume")
+        if (!isInitial && !volumeVerticalDragState.isDragging) {
+            Log.e("Player", "Called 1")
+            val progress = (volume.toFloat() / maxVolume.toFloat()).coerceIn(0f, 1f)
+            volumeChangeState = volumeChangeState.copy(
+                isDragging = true,
+                progress = progress,
+            )
+            hideVolumeChangeJob?.cancel()
+            hideVolumeChangeJob = null
+            hideVolumeChangeJob = coroutineScope.launch {
+                delay(3000)
+                volumeChangeState = volumeChangeState.copy(isDragging = false)
+            }
+        }
     }
 
     var showSubtitleSettings by remember { mutableStateOf(false) }
@@ -531,9 +550,14 @@ fun VideoPlayerScreen(
                                 val isLeftSide = offset.x < size.width / 2
                                 val isBottomAbove30 = offset.y > (size.height * 0.3f)
                                 val isBottomBelow30 = offset.y < (size.height * 0.7f)
+                                verticalProgressBarDragSize = verticalProgressBarHeightPx
                                 if (isBottomAbove30 && isBottomBelow30) {
                                     viewModel.hideControls()
                                     if (isLeftSide) {
+                                        hideVolumeChangeJob?.cancel()
+                                        hideVolumeChangeJob = null
+                                        volumeChangeState =
+                                            volumeChangeState.copy(isDragging = false)
                                         volumeVerticalDragState = volumeVerticalDragState.copy(
                                             isDragging = true,
                                             progress = getCurrentVolume(context)
@@ -549,13 +573,14 @@ fun VideoPlayerScreen(
                             },
                             onDragEnd = {
                                 volumeVerticalDragState = volumeVerticalDragState.copy(
-                                    isDragging = false,
+                                    isDragging = false
                                 )
                                 brightnessVerticalDragState = brightnessVerticalDragState.copy(
-                                    isDragging = false,
+                                    isDragging = false
                                 )
                             }
                         ) { change, dragAmount ->
+                            if(dragAmount.absoluteValue < 3f) return@detectVerticalDragGestures
                             if (volumeVerticalDragState.isDragging) {
                                 change.consume()
                                 val percent = -dragAmount / verticalProgressBarHeightPx
@@ -692,6 +717,7 @@ fun VideoPlayerScreen(
 
             VerticalDragController(
                 verticalProgressBarSize = verticalProgressBarSize,
+                volumeChangeState = volumeChangeState,
                 volumeVerticalDragState = volumeVerticalDragState,
                 brightnessVerticalDragState = brightnessVerticalDragState
             )

@@ -1,5 +1,6 @@
 package com.flix.videos.ui.app
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,9 +31,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.flix.videos.R
+import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
+import com.flix.videos.ui.app.player.EXTRA_CONTROL_CLOSE
+import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
+import com.flix.videos.ui.app.player.PlayerActivity
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.app.viewmodel.ViewMode
 
@@ -41,6 +47,8 @@ import com.flix.videos.ui.app.viewmodel.ViewMode
 fun VideosScreen(viewModel: ReadMediaVideosViewModel) {
     val videInfos by viewModel.videoInfos.collectAsState()
     val videosViewMode by viewModel.videosViewMode.collectAsState()
+
+    val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = {
@@ -74,8 +82,25 @@ fun VideosScreen(viewModel: ReadMediaVideosViewModel) {
                 )
             } else {
                 VideosList(
-                    videInfos,
-                    viewModel,
+                    videInfos = videInfos,
+                    viewModel = viewModel,
+                    onItemClick = { videoInfo ->
+                        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
+                            `package` = context.packageName
+                            putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
+                        }
+                        context.sendBroadcast(intent)
+                        context.startActivity(
+                            Intent(context, PlayerActivity::class.java)
+                                .apply {
+                                    data = videoInfo.uri
+                                    putExtra("video_id"   , videoInfo.id)
+                                    putExtra("title", videoInfo.title)
+                                    putExtra("video_width", videoInfo.width)
+                                    putExtra("video_height", videoInfo.height)
+                                    putExtra("total_duration", videoInfo.duration)
+                                })
+                    },
                     modifier = Modifier.weight(1f)
                 )
             }

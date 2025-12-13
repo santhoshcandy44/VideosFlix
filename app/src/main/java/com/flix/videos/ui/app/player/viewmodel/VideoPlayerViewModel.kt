@@ -3,6 +3,7 @@ package com.flix.videos.ui.app.player.viewmodel
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
@@ -32,6 +33,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
+import java.io.File
 
 
 data class AudioTrackInfo(
@@ -48,25 +50,23 @@ data class SubtitleTrackInfo(
     val label: String?
 )
 
+data class VideoParams(
+    val group: String?,
+    val id: Long
+)
+
 @OptIn(UnstableApi::class)
 @KoinViewModel
 class VideoPlayerViewModel
     (
     val applicationContext: Context,
-    @InjectedParam id: Long,
-    @InjectedParam uri: String,
-    @InjectedParam val title: String,
-    @InjectedParam val videoWidth: Int,
-    @InjectedParam val videoHeight: Int,
-//    @InjectedParam val totalDurationMillis: Long,
+    @InjectedParam videoParams: VideoParams,
     val mediaSourceRepository: MediaSourceRepository,
     val plaBackPosPrefs: PlaybackPosPrefs,
     val subtitlePrefs: SubtitlePrefs,
     val playbackSettingsPrefs: PlaybackSettingsPrefs,
-     val audioTrackPrefs: AudioTrackPrefs
+    val audioTrackPrefs: AudioTrackPrefs
 ) : ViewModel() {
-    val videoUri: Uri = uri.toUri()
-
     val exoPlayer = ExoPlayer.Builder(applicationContext.applicationContext).build()
 
     private val _isPlaying = MutableStateFlow(false)
@@ -106,9 +106,23 @@ class VideoPlayerViewModel
 
     val allVideos = mediaSourceRepository.getAllVideos()
 
-    private val playListIndex = findVideoIndexById(id)
+    val groupedVideos = allVideos.groupBy { File(it.path).parent ?: "Unknown" }
+        .mapValues { (groupParent, list) ->
+            list.map { video ->
+                val groupParentFile = File(groupParent)
+                val absPath = groupParentFile.absolutePath
+                val root = Environment.getExternalStorageDirectory().absolutePath
+                video.copy(
+                    displayGroupName = if (absPath == root) "Root" else groupParentFile.name
+                )
+            }
+        }
+
+    val requiredVideos = if(videoParams.group != null) groupedVideos[videoParams.group] ?: emptyList() else allVideos
+
+    private val playListIndex = findVideoIndexById(requiredVideos,videoParams.id)
     private val _currentPlayingVideoInfo = MutableStateFlow(
-        allVideos.getOrElse(
+        requiredVideos.getOrElse(
             playListIndex
         ) { VideoInfo.EMPTY }
     )
@@ -133,8 +147,7 @@ class VideoPlayerViewModel
         DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
 
     init {
-
-        val mediaSources = allVideos.map { videoInfo ->
+        val mediaSources = requiredVideos.map { videoInfo ->
             defaultMediaSourceFactory.createMediaSource(
                 MediaItem.Builder()
                     .setUri(videoInfo.uri)
@@ -182,8 +195,8 @@ class VideoPlayerViewModel
         }
     }
 
-    fun findVideoIndexById(videoId: Long): Int {
-        return allVideos.indexOfFirst { it.id == videoId }
+    fun findVideoIndexById(videos:List<VideoInfo>, videoId: Long): Int {
+        return videos.indexOfFirst { it.id == videoId }
             .takeIf { it != -1 } ?: 0
     }
 
@@ -450,7 +463,7 @@ class VideoPlayerViewModel
             .setLanguage("und")
             .build()
 
-        val newSources = allVideos.map { video ->
+        val newSources = requiredVideos.map { video ->
             val item = MediaItem.Builder()
                 .setUri(video.uri)
                 .setTag(video)

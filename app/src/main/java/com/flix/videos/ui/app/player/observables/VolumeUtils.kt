@@ -1,45 +1,49 @@
 package com.flix.videos.ui.app.player.observables
 
+import android.content.BroadcastReceiver
 import android.content.Context
-import android.database.ContentObserver
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun observeSystemVolume(
-    onVolumeChanged: (Int, Int) -> Unit
+fun observeVolumeChanges(
+    onVolumeChanged: (Boolean, Int, Int) -> Unit
 ) {
     val context = LocalContext.current
 
     DisposableEffect(Unit) {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                super.onChange(selfChange)
-                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                onVolumeChanged(maxVolume, currentVolume)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == "android.media.VOLUME_CHANGED_ACTION") {
+                    val streamType =
+                        intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+
+                    if (streamType == AudioManager.STREAM_MUSIC) {
+                        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                        val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        onVolumeChanged(false, max, current)
+                    }
+                }
             }
         }
 
-        context.contentResolver.registerContentObserver(
-            Settings.System.CONTENT_URI,
-            true,
-            observer
+        context.registerReceiver(
+            receiver,
+            IntentFilter("android.media.VOLUME_CHANGED_ACTION")
         )
 
         val maxVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val initial = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        onVolumeChanged(maxVolume, initial)
+        onVolumeChanged(true, maxVolume, initial)
 
         onDispose {
-            context.contentResolver.unregisterContentObserver(observer)
+            try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
         }
     }
 }
