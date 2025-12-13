@@ -26,7 +26,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -511,7 +510,7 @@ fun VideoPlayerScreen(
     observeVolumeChanges { isInitial, maxVolume, volume ->
         viewModel.setMuted(volume == 0)
         if(!isInitial)
-            volumeChangeState = volumeChangeState.copy(progress = volume.toFloat()/maxVolume.toFloat(),)
+            volumeChangeState = volumeChangeState.copy(progress = volume.toFloat()/maxVolume.toFloat())
     }
 
     var showSubtitleSettings by remember { mutableStateOf(false) }
