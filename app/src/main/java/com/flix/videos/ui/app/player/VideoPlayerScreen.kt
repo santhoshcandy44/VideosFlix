@@ -26,6 +26,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -106,7 +107,7 @@ fun VideoPlayerScreen(
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
 
     var videoWidth by remember { mutableIntStateOf(0) }
-    var videoHeight by remember { mutableStateOf(0) }
+    var videoHeight by remember { mutableIntStateOf(0) }
     val totalDurationMillis = currentPlayingVideoInfo.duration
 
     val exoPlayer = viewModel.exoPlayer
@@ -134,7 +135,7 @@ fun VideoPlayerScreen(
     val orientation = configuration.orientation
     val deviceOrientationFlow = rememberDeviceOrientationFlow()
     val deviceOrientation by deviceOrientationFlow.collectAsState()
-    var lastOrientation by rememberSaveable { mutableStateOf(orientation) }
+    var lastOrientation by rememberSaveable { mutableIntStateOf(orientation) }
     var doubleTapSeekDirection by rememberSaveable {
         mutableIntStateOf(
             ExoplayerSeekDirection.SEEK_NONE
@@ -151,7 +152,7 @@ fun VideoPlayerScreen(
     val coroutineScope = rememberCoroutineScope()
     val isLandscape = isLandscape()
 
-    var subtitlePadding by rememberSaveable { mutableStateOf(0) }
+    var subtitlePadding by rememberSaveable { mutableIntStateOf(0) }
 
     LaunchedEffect(isLandscape) {
         if (isLandscape)
@@ -477,7 +478,7 @@ fun VideoPlayerScreen(
     val density = LocalDensity.current
     val verticalProgressBarSize = DpSize(24.dp, 160.dp)
     val verticalProgressBarHeightPx = with(density) { verticalProgressBarSize.height.toPx() }
-    var verticalProgressBarDragSize by remember { mutableStateOf(0f) }
+    var verticalProgressBarDragSize by remember { mutableFloatStateOf(0f) }
 
     var volumeChangeState by remember { mutableStateOf(VerticalDragState()) }
     var volumeVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
