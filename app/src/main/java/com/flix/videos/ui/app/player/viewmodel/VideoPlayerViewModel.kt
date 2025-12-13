@@ -2,6 +2,7 @@ package com.flix.videos.ui.app.player.viewmodel
 
 import android.app.PictureInPictureParams
 import android.content.Context
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
@@ -104,27 +105,14 @@ class VideoPlayerViewModel
     private val _currentRepeatMode = MutableStateFlow(playbackSettingsPrefs.getPlaybackMode())
     val currentRepeatMode = _currentRepeatMode.asStateFlow()
 
-    val allVideos = mediaSourceRepository.getAllVideos()
+    var allVideos = emptyList<VideoInfo>()
 
-    val groupedVideos = allVideos.groupBy { File(it.path).parent ?: "Unknown" }
-        .mapValues { (groupParent, list) ->
-            list.map { video ->
-                val groupParentFile = File(groupParent)
-                val absPath = groupParentFile.absolutePath
-                val root = Environment.getExternalStorageDirectory().absolutePath
-                video.copy(
-                    displayGroupName = if (absPath == root) "Root" else groupParentFile.name
-                )
-            }
-        }
+    var groupedVideos = emptyMap<String, List<VideoInfo>>()
 
-    val requiredVideos = if(videoParams.group != null) groupedVideos[videoParams.group] ?: emptyList() else allVideos
+    var requiredVideos = emptyList<VideoInfo>()
 
-    private val playListIndex = findVideoIndexById(requiredVideos,videoParams.id)
     private val _currentPlayingVideoInfo = MutableStateFlow(
-        requiredVideos.getOrElse(
-            playListIndex
-        ) { VideoInfo.EMPTY }
+        VideoInfo.EMPTY
     )
     val currentPlayingVideoInfo = _currentPlayingVideoInfo.asStateFlow()
 
@@ -150,62 +138,88 @@ class VideoPlayerViewModel
         _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
     }
 
+    private var loudnessEnhancer: LoudnessEnhancer? = null
+
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading = _isLoading.asStateFlow()
+
     init {
-        val mediaSources = requiredVideos.map { videoInfo ->
-            defaultMediaSourceFactory.createMediaSource(
-                MediaItem.Builder()
-                    .setUri(videoInfo.uri)
-                    .setTag(videoInfo)
-                    .apply {
-                        subtitlePrefs.getSavedSubtitleUri(videoInfo.uri)?.let {
-                            val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(it)
-                                .setMimeType(mediaSourceRepository.detectSubtitleMimeType(it))  // auto-detect (SRT/ASS/VTT)
-                                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                                .setRoleFlags(C.ROLE_FLAG_CAPTION)
-                                .setLanguage("und")
-                                .build()
-                            setSubtitleConfigurations(listOf(subtitleConfig))
-                        }
+        viewModelScope.launch {
+            allVideos = mediaSourceRepository.getAllVideos()
+            groupedVideos = allVideos.groupBy { File(it.path).parent ?: "Unknown" }
+                .mapValues { (groupParent, list) ->
+                    list.map { video ->
+                        val groupParentFile = File(groupParent)
+                        val absPath = groupParentFile.absolutePath
+                        val root = Environment.getExternalStorageDirectory().absolutePath
+                        video.copy(
+                            displayGroupName = if (absPath == root) "Root" else groupParentFile.name
+                        )
                     }
-                    .build()
-            )
-        }
-        exoPlayer.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                .build(), true
-        )
-        exoPlayer.setMediaSources(
-            mediaSources,
-            playListIndex,
-            plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
-        )
-        _currentLocalSubtitle.value =
-            subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)?.let {
-                mediaSourceRepository.getSubtitleInfoFromUri(it)
+                }
+            requiredVideos = if (videoParams.group != null) groupedVideos[videoParams.group]
+                ?: emptyList() else allVideos
+
+            val playItemIndex = findVideoIndexById(requiredVideos, videoParams.id)
+            _currentPlayingVideoInfo.value = requiredVideos.getOrElse(playItemIndex,
+                { VideoInfo.EMPTY })
+            val mediaSources = requiredVideos.map { videoInfo ->
+                defaultMediaSourceFactory.createMediaSource(
+                    MediaItem.Builder()
+                        .setUri(videoInfo.uri)
+                        .setTag(videoInfo)
+                        .apply {
+                            subtitlePrefs.getSavedSubtitleUri(videoInfo.uri)?.let {
+                                val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(it)
+                                    .setMimeType(mediaSourceRepository.detectSubtitleMimeType(it))  // auto-detect (SRT/ASS/VTT)
+                                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                    .setRoleFlags(C.ROLE_FLAG_CAPTION)
+                                    .setLanguage("und")
+                                    .build()
+                                setSubtitleConfigurations(listOf(subtitleConfig))
+                            }
+                        }
+                        .build()
+                )
             }
-        applyRepeatMode(_currentRepeatMode.value)
-        if (_isSubtitleEnabled.value)
-            enableSubtitles()
-        else
-            disableSubtitles()
-        exoPlayer.setPlaybackSpeed(_currentPlayPackSpeed.value)
-        exoPlayer.prepare()
-        exoPlayer.play()
+            exoPlayer.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(), true
+            )
+            exoPlayer.setMediaSources(
+                mediaSources,
+                playItemIndex,
+                plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
+            )
+            _currentLocalSubtitle.value =
+                subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)?.let {
+                    mediaSourceRepository.getSubtitleInfoFromUri(it)
+                }
+            applyRepeatMode(_currentRepeatMode.value)
+            if (_isSubtitleEnabled.value)
+                enableSubtitles()
+            else
+                disableSubtitles()
+            exoPlayer.setPlaybackSpeed(_currentPlayPackSpeed.value)
+            exoPlayer.prepare()
+            exoPlayer.play()
+
+            _isLoading.value = false
+        }
 
         viewModelScope.launch {
             _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
+            applicationContext.contentResolver.registerContentObserver(
+                MediaStore.Files.getContentUri("external"),
+                true,
+                subtitleObserver
+            )
         }
-
-        applicationContext.contentResolver.registerContentObserver(
-            MediaStore.Files.getContentUri("external"),
-            true,
-            subtitleObserver
-        )
     }
 
-    fun findVideoIndexById(videos:List<VideoInfo>, videoId: Long): Int {
+    fun findVideoIndexById(videos: List<VideoInfo>, videoId: Long): Int {
         return videos.indexOfFirst { it.id == videoId }
             .takeIf { it != -1 } ?: 0
     }
@@ -571,8 +585,26 @@ class VideoPlayerViewModel
         return audioTrackPrefs.getSavedAudioTrack(uri)
     }
 
+    fun onAudioSessionId(audioSessionId: Int) {
+        if (audioSessionId <= 0) return
+        loudnessEnhancer?.release()
+        loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
+            enabled = true
+        }
+    }
+
+    fun setGainMillibels(mb: Int) {
+        loudnessEnhancer?.setTargetGain(mb.coerceIn(0, 1500))
+    }
+
+    fun releaseLoudnessEnhancer() {
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
+    }
+
     override fun onCleared() {
         super.onCleared()
+        releaseLoudnessEnhancer()
         applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
     }
 }

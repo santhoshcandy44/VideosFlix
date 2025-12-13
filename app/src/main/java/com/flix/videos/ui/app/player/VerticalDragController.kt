@@ -48,10 +48,12 @@ fun BoxScope.VerticalDragController(
                 volumeVerticalDragState.progress,
             trackColor = Color(0xFF6EE66E).copy(0.6f),
             icon = Icons.AutoMirrored.Filled.VolumeOff,
-            percent = ((if (volumeChangeState.isDragging)
-                volumeChangeState.progress
-            else
-                volumeVerticalDragState.progress) * 100).toInt()
+            percent = playerVolumeToPercent(
+                (if (volumeChangeState.isDragging)
+                    volumeChangeState.progress
+                else
+                    volumeVerticalDragState.progress)
+            )
         )
     }
 
@@ -109,4 +111,8 @@ private fun DragIndicator(
             )
         }
     }
+}
+
+private fun playerVolumeToPercent(volume: Float): Int {
+    return (volume.coerceIn(0f, 1f) * 150).toInt()
 }

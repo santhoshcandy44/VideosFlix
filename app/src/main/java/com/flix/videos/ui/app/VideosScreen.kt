@@ -44,8 +44,12 @@ import com.flix.videos.ui.app.viewmodel.ViewMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VideosScreen(viewModel: ReadMediaVideosViewModel) {
+fun VideosScreen(
+    viewModel: ReadMediaVideosViewModel,
+    onGroupClick: (String, String) -> Unit
+) {
     val videInfos by viewModel.videoInfos.collectAsState()
+    val groupedVideos by viewModel.groupedVideos.collectAsState()
     val videosViewMode by viewModel.videosViewMode.collectAsState()
 
     val context = LocalContext.current
@@ -75,34 +79,42 @@ fun VideosScreen(viewModel: ReadMediaVideosViewModel) {
         PermissionWrapper(onPermissionGranted = {
             viewModel.fetchVideoInfos()
         }) {
-            if (videosViewMode == ViewMode.GRID) {
-                VideosGrid(
-                    videInfos,
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                VideosList(
-                    videInfos = videInfos,
-                    viewModel = viewModel,
-                    onItemClick = { videoInfo ->
-                        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-                            `package` = context.packageName
-                            putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
-                        }
-                        context.sendBroadcast(intent)
-                        context.startActivity(
-                            Intent(context, PlayerActivity::class.java)
-                                .apply {
-                                    data = videoInfo.uri
-                                    putExtra("video_id"   , videoInfo.id)
-                                    putExtra("title", videoInfo.title)
-                                    putExtra("video_width", videoInfo.width)
-                                    putExtra("video_height", videoInfo.height)
-                                    putExtra("total_duration", videoInfo.duration)
-                                })
-                    },
-                    modifier = Modifier.weight(1f)
-                )
+            when (videosViewMode) {
+                ViewMode.LIST -> {
+                    VideosList(
+                        videInfos = videInfos,
+                        viewModel = viewModel,
+                        onItemClick = { videoInfo ->
+                            val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
+                                `package` = context.packageName
+                                putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
+                            }
+                            context.sendBroadcast(intent)
+                            context.startActivity(
+                                Intent(context, PlayerActivity::class.java)
+                                    .apply {
+                                        data = videoInfo.uri
+                                        putExtra("video_id", videoInfo.id)
+                                        putExtra("title", videoInfo.title)
+                                        putExtra("video_width", videoInfo.width)
+                                        putExtra("video_height", videoInfo.height)
+                                        putExtra("total_duration", videoInfo.duration)
+                                    })
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                ViewMode.GRID -> {
+                    VideosGrid(
+                        videInfos,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                ViewMode.FOLDER -> {
+                    FoldersScreen(groupedVideos, onGroupClick)
+                }
             }
         }
     }
@@ -128,39 +140,24 @@ fun ViewModeSelector(
             onDismissRequest = { expanded = false },
             shape = RoundedCornerShape(8.dp)
         ) {
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = currentMode == ViewMode.LIST,
-                            onClick = null
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("List View")
+            ViewMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = currentMode == mode,
+                                onClick = null
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(mode.title)
+                        }
+                    },
+                    onClick = {
+                        onModeChange(mode)
+                        expanded = false
                     }
-                },
-                onClick = {
-                    onModeChange(ViewMode.LIST)
-                    expanded = false
-                },
-            )
-
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(
-                            selected = currentMode == ViewMode.GRID,
-                            onClick = null
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Grid View")
-                    }
-                },
-                onClick = {
-                    onModeChange(ViewMode.GRID)
-                    expanded = false
-                }
-            )
+                )
+            }
         }
     }
 }

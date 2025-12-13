@@ -5,6 +5,8 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Color
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.theme.AppTheme
@@ -38,19 +40,21 @@ class PlayerActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 SafeDrawing(isFullScreenMode = true) {
-                    VideoPlayerScreen(
-                        volumeKeyChannel = volumeKeyChannel,
-                        viewModel = koinViewModel(parameters = {
-                            parametersOf(
-                                VideoParams(
-                                    group = group,
-                                    id = videoId
+                    Surface(color = Color.Black) {
+                        VideoPlayerScreen(
+                            volumeKeyChannel = volumeKeyChannel,
+                            viewModel = koinViewModel(parameters = {
+                                parametersOf(
+                                    VideoParams(
+                                        group = group,
+                                        id = videoId
+                                    )
                                 )
-                            )
-                        }),
-                        onPopUp = {
-                            this@PlayerActivity.finish()
-                        })
+                            }),
+                            onPopUp = {
+                                this@PlayerActivity.finish()
+                            })
+                    }
                 }
             }
         }

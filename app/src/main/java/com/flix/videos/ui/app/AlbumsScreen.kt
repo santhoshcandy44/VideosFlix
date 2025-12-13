@@ -101,9 +101,10 @@ fun AlbumsScreen(
                                     CountBadge(
                                         "${value.size - 4}+",
                                         modifier = Modifier
-                                            .fillMaxSize()
                                             .padding(8.dp)
-                                            .background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                            .clip(CircleShape),
                                         style = LocalTextStyle.current.copy(
                                             fontSize = 24.sp,
                                             lineHeight = 24.sp,

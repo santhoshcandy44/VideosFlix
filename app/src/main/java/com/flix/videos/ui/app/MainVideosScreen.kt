@@ -43,7 +43,15 @@ fun MainVideosScreen(viewModel: ReadMediaVideosViewModel = koinViewModel()) {
         backStack = videosBackStack,
         entryProvider = entryProvider {
             entry<NavigationBarRoutes.Videos> {
-                VideosScreen(viewModel)
+                VideosScreen(viewModel, onGroupClick = {  group, groupName ->
+                    videosBackStack.add(GroupVideos(group, groupName))
+                })
+            }
+
+            entry<GroupVideos> {
+                GroupVideosScreen(it.group, it.groupName, viewModel) {
+                    videosBackStack.removeLastOrNull()
+                }
             }
         },
         entryDecorators =

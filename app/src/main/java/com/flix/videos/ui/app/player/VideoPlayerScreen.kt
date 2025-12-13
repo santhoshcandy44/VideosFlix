@@ -131,6 +131,9 @@ fun VideoPlayerScreen(
     val currentSubtitleTrack by viewModel.currentSubtitleTrack.collectAsState()
     val localSubtitles by viewModel.localSubtitles.collectAsState()
     val currentLocalSubtitle by viewModel.currentLocalSubtitle.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    if(isLoading) return
 
     val context = LocalContext.current
 
@@ -253,6 +256,12 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         val listener = object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                super.onAudioSessionIdChanged(audioSessionId)
+                viewModel.onAudioSessionId(audioSessionId)
+                viewModel.setGainMillibels(1500)
+            }
+
             override fun onCues(cueGroup: CueGroup) {
                 super.onCues(cueGroup)
                 subtitleViewRef.get()?.setCues(cueGroup.cues)
@@ -507,9 +516,8 @@ fun VideoPlayerScreen(
             }
     }
 
-    observeVolumeChanges { isInitial, maxVolume, volume ->
+    observeVolumeChanges { _ , maxVolume, volume ->
         viewModel.setMuted(volume == 0)
-        if(!isInitial)
             volumeChangeState = volumeChangeState.copy(progress = volume.toFloat()/maxVolume.toFloat())
     }
 
@@ -518,8 +526,7 @@ fun VideoPlayerScreen(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black),
+            .fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         if (isInPipMode) {

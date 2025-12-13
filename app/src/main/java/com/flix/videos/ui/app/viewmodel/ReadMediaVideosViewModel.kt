@@ -14,7 +14,6 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.bottombar.NavigationBarRoutes
-import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,9 +23,10 @@ import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import java.io.File
 
-enum class ViewMode {
-    LIST,
-    GRID
+enum class ViewMode(val title: String) {
+    LIST("List View"),
+    GRID("Grid View"),
+    FOLDER("Folder View")
 }
 
 @KoinViewModel
