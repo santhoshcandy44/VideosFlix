@@ -72,13 +72,12 @@ fun PermissionWrapper(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            shortToast(context, "Permission Granted")
+            onPermissionGranted()
         } else {
-            if (shouldShowRequestPermissionRationale()) {
+            if (shouldShowRequestPermissionRationale())
                 showPermissionRationaleDialog = true
-            } else {
+            else
                 showPermissionAllowDialog = true
-            }
         }
     }
 

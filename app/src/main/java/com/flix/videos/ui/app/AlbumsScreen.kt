@@ -1,5 +1,6 @@
 package com.flix.videos.ui.app
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
@@ -129,9 +132,11 @@ private fun FourColumnGrid(
     endContent: (@Composable () -> Unit)? = null
 ) {
     BoxWithConstraints {
-        val itemSpacing = 6.dp
-        val totalSpacing = itemSpacing * 1
-        val itemSize = (maxWidth - totalSpacing) / 2
+        val columns = 2
+        val spacing = 6.dp
+        val totalSpacing = spacing * (columns - 1)
+
+        val itemSize = ((maxWidth - totalSpacing) / columns).value.toInt().dp
 
         FlowRow(
             maxItemsInEachRow = 2,
@@ -144,8 +149,7 @@ private fun FourColumnGrid(
                 Box(
                     modifier = Modifier
                         .width(itemSize)
-                        .aspectRatio(1f)
-                        .aspectRatio(1f)
+                        .height(itemSize)
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
@@ -155,6 +159,7 @@ private fun FourColumnGrid(
                             .build(),
                         contentDescription = null,
                         modifier = Modifier
+                            .fillMaxSize()
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, Color.DarkGray, RoundedCornerShape(8.dp)),
                         contentScale = ContentScale.Crop

@@ -1,12 +1,15 @@
 package com.flix.videos.ui.app.viewmodel
 
+import android.Manifest
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Size
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MimeTypes
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.prefs.MediaPrefs
@@ -25,8 +28,19 @@ class MediaSourceRepository(
     val applicationContext: Context,
     val mediaPrefs: MediaPrefs
 ) {
+    private val hasReadMediaPermissionIsGranted: () -> Boolean = {
+        ContextCompat.checkSelfPermission(applicationContext, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_VIDEO       // Android 13+
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE  // Android 12 and below
+        }
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     @Suppress("DEPRECATION")
     fun getAllVideos(): List<VideoInfo> {
+        if(!hasReadMediaPermissionIsGranted()) return emptyList()
+
         val hasSnapshot = mediaPrefs.hasSnapshot()
         val oldIds = if (hasSnapshot) mediaPrefs.getSeenVideoIds() else emptySet()
         val currentIds = mutableSetOf<Long>()

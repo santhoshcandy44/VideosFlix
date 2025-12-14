@@ -108,7 +108,8 @@ data class VerticalDragState(
 @Composable
 fun VideoPlayerScreen(
     volumeKeyChannel: Channel<Int>,
-    onPopUp: () -> Unit, viewModel: VideoPlayerViewModel, modifier: Modifier = Modifier
+    onPopUp: () -> Unit, viewModel: VideoPlayerViewModel,
+    modifier: Modifier = Modifier
 ) {
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
 
