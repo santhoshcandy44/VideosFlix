@@ -181,6 +181,10 @@ fun VideosList(
                             color = Color.LightGray,
                             style = MaterialTheme.typography.bodySmall
                         )
+
+                        if(videoInfo.isNewlyAdded){
+                            NewVideoText()
+                        }
                     }
                 }
 

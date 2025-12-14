@@ -4,15 +4,19 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -24,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,7 +53,7 @@ fun FoldersScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .noRippleClickable{
+                    .noRippleClickable {
                         onGroupClick(group, value.first().displayGroupName)
                     },
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -79,15 +84,40 @@ fun FoldersScreen(
                     )
                 }
 
-                Text(
-                    value.first().displayGroupName,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier
+                    .weight(1f)
+                ) {
+                    Text(
+                        value.first().displayGroupName,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if(value.any { it.isNewlyAdded }){
+                        NewVideoText()
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+fun NewVideoText(){
+    Text(
+        "NEW",
+        color = Color.White,
+        fontSize = 10.sp,
+        style = TextStyle(
+            platformStyle = PlatformTextStyle(
+                includeFontPadding = false
+            )
+        ),
+        modifier = Modifier
+            .background(
+                color = Color(0xFF25D366)
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }
 
 @Composable

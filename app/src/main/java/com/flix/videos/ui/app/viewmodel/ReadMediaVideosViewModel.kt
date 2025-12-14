@@ -14,11 +14,14 @@ import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.bottombar.NavigationBarRoutes
+import com.flix.videos.ui.app.player.prefs.MediaPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import java.io.File
@@ -32,7 +35,8 @@ enum class ViewMode(val title: String) {
 @KoinViewModel
 class ReadMediaVideosViewModel(
     val applicationContext: Context,
-    val mediaSourceRepository: MediaSourceRepository
+    val mediaSourceRepository: MediaSourceRepository,
+    val mediaPrefs: MediaPrefs
 ) : ViewModel() {
     val videosBackstack = NavBackStack<NavKey>(NavigationBarRoutes.Videos)
     val albumsBackStack = NavBackStack<NavKey>(NavigationBarRoutes.Albums)
@@ -40,14 +44,14 @@ class ReadMediaVideosViewModel(
     private val _videoInfos = MutableStateFlow<List<VideoInfo>>(emptyList())
     val videoInfos = _videoInfos.asStateFlow()
 
-    private val sharedPrefs =
+    private val appPrefs =
         applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
 
     companion object {
         private const val KEY_VIEW_MODE = "videos_view_mode"
     }
 
-    private val _videosViewMode = MutableStateFlow(getViewMode(sharedPrefs))
+    private val _videosViewMode = MutableStateFlow(getViewMode(appPrefs))
     val videosViewMode = _videosViewMode.asStateFlow()
 
     val groupedVideos = _videoInfos
@@ -84,13 +88,26 @@ class ReadMediaVideosViewModel(
         }
 
     init {
-        sharedPrefs.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        appPrefs.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
         applicationContext.contentResolver.registerContentObserver(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             true,
             mediaVideoObserver
         )
         fetchVideoInfos()
+        mediaPrefs.registerOnSharedPreferenceChangeListener()
+        viewModelScope.launch {
+            mediaPrefs.changes.collectLatest { seenIds ->
+                _videoInfos.update { currentList ->
+                    currentList.map { video ->
+                        if (video.id in seenIds && video.isNewlyAdded)
+                            video.copy(isNewlyAdded = false)
+                        else
+                            video
+                    }
+                }
+            }
+        }
     }
 
     private fun getViewMode(prefs: SharedPreferences): ViewMode {
@@ -99,7 +116,7 @@ class ReadMediaVideosViewModel(
     }
 
     fun saveVideoViewMode(mode: ViewMode) {
-        sharedPrefs.edit { putString(KEY_VIEW_MODE, mode.name) }
+        appPrefs.edit { putString(KEY_VIEW_MODE, mode.name) }
         _videosViewMode.value = mode
     }
 
@@ -137,9 +154,16 @@ class ReadMediaVideosViewModel(
         return rows > 0
     }
 
+    fun makeNewlyAddedMediaIsSeen(videoId: Long){
+       viewModelScope.launch {
+           mediaPrefs.markVideoAsSeen(videoId)
+       }
+    }
+
     override fun onCleared() {
         super.onCleared()
         applicationContext.contentResolver.unregisterContentObserver(mediaVideoObserver)
-        sharedPrefs.unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        appPrefs.unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        mediaPrefs.unregisterOnSharedPreferenceChangeListener()
     }
 }

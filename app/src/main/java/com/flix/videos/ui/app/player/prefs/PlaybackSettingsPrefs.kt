@@ -1,7 +1,7 @@
 package com.flix.videos.ui.app.player.prefs
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.content.edit
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
 import org.koin.core.annotation.Factory
 
@@ -23,9 +23,9 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
 
     /** Save audio-only mode */
     fun setAudioOnly(enabled: Boolean) {
-        prefs.edit()
-            .putBoolean(AUDIO_ONLY, enabled)
-            .apply()
+        prefs.edit {
+            putBoolean(AUDIO_ONLY, enabled)
+        }
     }
 
     /** Load audio-only mode */
@@ -34,9 +34,9 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
     }
 
     fun setSubtitlesEnabled(enabled: Boolean) {
-        prefs.edit()
-            .putBoolean(SUBTITLES_ENABLED, enabled)
-            .apply()
+        prefs.edit {
+            putBoolean(SUBTITLES_ENABLED, enabled)
+        }
     }
 
     fun isSubtitlesEnabled(): Boolean {
@@ -44,9 +44,9 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
     }
 
     fun setPlaybackMode(mode: ExoPlayerRepeatMode) {
-        prefs.edit()
-            .putString(PLAYBACK_MODE, mode.name)
-            .apply()
+        prefs.edit {
+            putString(PLAYBACK_MODE, mode.name)
+        }
     }
 
     fun getPlaybackMode(): ExoPlayerRepeatMode {
@@ -55,9 +55,9 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        prefs.edit()
-            .putFloat(PLAYBACK_SPEED, speed)
-            .apply()
+        prefs.edit {
+            putFloat(PLAYBACK_SPEED, speed)
+            }
     }
 
     fun getPlaybackSpeed(): Float {

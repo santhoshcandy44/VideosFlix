@@ -70,6 +70,7 @@ fun GroupVideosScreen(
             videInfos = videInfos,
             viewModel = viewModel,
             onItemClick = { videoInfo ->
+                viewModel.makeNewlyAddedMediaIsSeen(videoInfo.id)
                 val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
                     `package` = context.packageName
                     putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)

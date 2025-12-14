@@ -9,10 +9,11 @@ import android.provider.OpenableColumns
 import android.util.Size
 import androidx.media3.common.MimeTypes
 import com.flix.videos.models.VideoInfo
+import com.flix.videos.ui.app.player.prefs.MediaPrefs
 import org.koin.core.annotation.Factory
 
 data class SubtitleFileInfo(
-    val id:Long,
+    val id: Long,
     val uri: Uri,
     val name: String,
     val mimeType: String?,
@@ -20,9 +21,16 @@ data class SubtitleFileInfo(
 )
 
 @Factory
-class MediaSourceRepository(val applicationContext: Context) {
+class MediaSourceRepository(
+    val applicationContext: Context,
+    val mediaPrefs: MediaPrefs
+) {
     @Suppress("DEPRECATION")
     fun getAllVideos(): List<VideoInfo> {
+        val hasSnapshot = mediaPrefs.hasSnapshot()
+        val oldIds = if (hasSnapshot) mediaPrefs.getSeenVideoIds() else emptySet()
+        val currentIds = mutableSetOf<Long>()
+
         val videos = mutableListOf<VideoInfo>()
 
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -95,9 +103,14 @@ class MediaSourceRepository(val applicationContext: Context) {
                     null
                 }
 
+                val isNewVideo = hasSnapshot && !oldIds.contains(id)
+                if(!isNewVideo)
+                    currentIds.add(id)
+
                 videos.add(
                     VideoInfo(
                         id,
+                        isNewVideo,
                         uri,
                         data,
                         displayName,
@@ -113,6 +126,8 @@ class MediaSourceRepository(val applicationContext: Context) {
                 )
             }
         }
+
+        mediaPrefs.saveSeenVideoIds(currentIds)
         return videos
     }
 
@@ -200,10 +215,14 @@ class MediaSourceRepository(val applicationContext: Context) {
         )?.use { cursor ->
 
             if (cursor.moveToFirst()) {
-                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
-                val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME))
-                val mime = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE))
-                val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE))
+                val id =
+                    cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID))
+                val name =
+                    cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME))
+                val mime =
+                    cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE))
+                val size =
+                    cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE))
 
                 return SubtitleFileInfo(
                     id = id,
@@ -219,21 +238,21 @@ class MediaSourceRepository(val applicationContext: Context) {
     }
 
     fun detectSubtitleMimeType(uri: Uri): String {
-         val resolverMime = applicationContext.contentResolver.getType(uri)
-         if (!resolverMime.isNullOrEmpty()) return resolverMime
+        val resolverMime = applicationContext.contentResolver.getType(uri)
+        if (!resolverMime.isNullOrEmpty()) return resolverMime
         val fileName = getFileName(applicationContext, uri)?.lowercase()
             ?: uri.lastPathSegment?.lowercase() // fallback
             ?: return MimeTypes.TEXT_UNKNOWN
         return when {
-            fileName.endsWith(".srt")  -> MimeTypes.APPLICATION_SUBRIP
-            fileName.endsWith(".vtt")  -> MimeTypes.TEXT_VTT
-            fileName.endsWith(".ssa")  -> MimeTypes.TEXT_SSA   // SSA/ASS both use SSA MIME
-            fileName.endsWith(".ass")  -> MimeTypes.TEXT_SSA
+            fileName.endsWith(".srt") -> MimeTypes.APPLICATION_SUBRIP
+            fileName.endsWith(".vtt") -> MimeTypes.TEXT_VTT
+            fileName.endsWith(".ssa") -> MimeTypes.TEXT_SSA   // SSA/ASS both use SSA MIME
+            fileName.endsWith(".ass") -> MimeTypes.TEXT_SSA
             fileName.endsWith(".ttml") -> MimeTypes.APPLICATION_TTML
             fileName.endsWith(".dfxp") -> MimeTypes.APPLICATION_TTML
-            fileName.endsWith(".xml")  -> MimeTypes.APPLICATION_TTML  // many TTML files
-            fileName.endsWith(".sub")  -> MimeTypes.TEXT_UNKNOWN      // only paired with idx
-            fileName.endsWith(".lrc")  -> MimeTypes.TEXT_UNKNOWN      // lyrics not supported
+            fileName.endsWith(".xml") -> MimeTypes.APPLICATION_TTML  // many TTML files
+            fileName.endsWith(".sub") -> MimeTypes.TEXT_UNKNOWN      // only paired with idx
+            fileName.endsWith(".lrc") -> MimeTypes.TEXT_UNKNOWN      // lyrics not supported
             else -> MimeTypes.TEXT_UNKNOWN
         }
     }

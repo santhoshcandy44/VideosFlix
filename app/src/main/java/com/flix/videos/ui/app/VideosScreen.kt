@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.flix.videos.R
+import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
 import com.flix.videos.ui.app.player.EXTRA_CONTROL_CLOSE
 import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
@@ -53,6 +54,25 @@ fun VideosScreen(
     val videosViewMode by viewModel.videosViewMode.collectAsState()
 
     val context = LocalContext.current
+
+    val startPlayerActivity: (VideoInfo) -> Unit = { videoInfo ->
+        viewModel.makeNewlyAddedMediaIsSeen(videoInfo.id)
+        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
+            `package` = context.packageName
+            putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
+        }
+        context.sendBroadcast(intent)
+        context.startActivity(
+            Intent(context, PlayerActivity::class.java)
+                .apply {
+                    data = videoInfo.uri
+                    putExtra("video_id", videoInfo.id)
+                    putExtra("title", videoInfo.title)
+                    putExtra("video_width", videoInfo.width)
+                    putExtra("video_height", videoInfo.height)
+                    putExtra("total_duration", videoInfo.duration)
+                })
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = {
@@ -84,23 +104,7 @@ fun VideosScreen(
                     VideosList(
                         videInfos = videInfos,
                         viewModel = viewModel,
-                        onItemClick = { videoInfo ->
-                            val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-                                `package` = context.packageName
-                                putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
-                            }
-                            context.sendBroadcast(intent)
-                            context.startActivity(
-                                Intent(context, PlayerActivity::class.java)
-                                    .apply {
-                                        data = videoInfo.uri
-                                        putExtra("video_id", videoInfo.id)
-                                        putExtra("title", videoInfo.title)
-                                        putExtra("video_width", videoInfo.width)
-                                        putExtra("video_height", videoInfo.height)
-                                        putExtra("total_duration", videoInfo.duration)
-                                    })
-                        },
+                        onItemClick = startPlayerActivity,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -108,7 +112,8 @@ fun VideosScreen(
                 ViewMode.GRID -> {
                     VideosGrid(
                         videInfos,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onItemClick = startPlayerActivity
                     )
                 }
 
@@ -119,6 +124,7 @@ fun VideosScreen(
         }
     }
 }
+
 
 @Composable
 fun ViewModeSelector(

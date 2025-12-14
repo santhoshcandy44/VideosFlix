@@ -7,6 +7,7 @@ import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 
 data class VideoInfo(
     val id:Long,
+    val isNewlyAdded: Boolean,
     val uri: Uri,
     val path: String,
     val displayName: String,
@@ -25,6 +26,7 @@ data class VideoInfo(
     companion object {
         val EMPTY  = VideoInfo(
             id = 0L,
+            isNewlyAdded = false,
             uri = Uri.EMPTY,
             path = "",
             displayName = "",

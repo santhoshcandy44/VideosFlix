@@ -22,6 +22,7 @@ import androidx.media3.session.MediaSession
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
 import com.flix.videos.ui.app.player.prefs.AudioTrackPrefs
+import com.flix.videos.ui.app.player.prefs.MediaPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
 import com.flix.videos.ui.app.player.prefs.SubtitlePrefs
@@ -31,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
@@ -172,8 +174,8 @@ class VideoPlayerViewModel
 
             val playItemIndex = findVideoIndexById(requiredVideos, videoParams.id)
             _currentPlayingVideoInfo.value = requiredVideos.getOrElse(
-                playItemIndex,
-                { VideoInfo.EMPTY })
+                playItemIndex
+            ) { VideoInfo.EMPTY }
             val mediaSources = requiredVideos.map { videoInfo ->
                 defaultMediaSourceFactory.createMediaSource(
                     MediaItem.Builder()

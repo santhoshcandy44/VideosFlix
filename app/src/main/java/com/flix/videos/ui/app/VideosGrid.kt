@@ -1,6 +1,5 @@
 package com.flix.videos.ui.app
 
-import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,10 +18,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.flix.videos.models.VideoInfo
-import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_CLOSE
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
-import com.flix.videos.ui.app.player.PlayerActivity
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 
 
@@ -31,8 +26,8 @@ import com.flix.videos.ui.utils.NoIndicationInteractionSource
 fun VideosGrid(
     videInfos: List<VideoInfo>,
     modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
+    onItemClick:(VideoInfo)-> Unit
+    ) {
     LazyVerticalStaggeredGrid(
         modifier = modifier.fillMaxSize(),
         columns = StaggeredGridCells.Adaptive(120.dp),
@@ -48,21 +43,7 @@ fun VideosGrid(
                     modifier = Modifier.fillMaxWidth(),
                     interactionSource = remember { NoIndicationInteractionSource() },
                     onClick = {
-                        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-                            `package` = context.packageName
-                            putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
-                        }
-                        context.sendBroadcast(intent)
-                        context.startActivity(
-                            Intent(context, PlayerActivity::class.java)
-                                .apply {
-                                    data = videoInfo.uri
-                                    putExtra("video_id", videoInfo.id)
-                                    putExtra("title", videoInfo.title)
-                                    putExtra("video_width", videoInfo.width)
-                                    putExtra("video_height", videoInfo.height)
-                                    putExtra("total_duration", videoInfo.duration)
-                                })
+                        onItemClick(videoInfo)
                     }
                 ) {
                     Image(
