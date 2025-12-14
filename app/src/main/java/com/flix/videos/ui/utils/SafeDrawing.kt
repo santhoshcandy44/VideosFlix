@@ -19,10 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowInsetsControllerCompat
 
 @Composable
 fun SafeDrawing(
@@ -31,12 +33,23 @@ fun SafeDrawing(
     isFullScreenMode: Boolean = false,
     isNavigationBarContrastEnforced: Boolean = false,
     isImePaddingEnabled: Boolean = true,
+    isLightStatusBarEnabled : Boolean  = true,
     content: @Composable () -> Unit,
 ) {
     val window = LocalContext.current.findActivity().window
+
+    if(isLightStatusBarEnabled){
+        SideEffect{
+            val controller = WindowInsetsControllerCompat(window, window.decorView)
+            controller.isAppearanceLightStatusBars = false
+            controller.isAppearanceLightNavigationBars = false
+        }
+    }
+
     LaunchedEffect(window) {
         window.setNavigationBarContrastEnforced(isNavigationBarContrastEnforced)
     }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier

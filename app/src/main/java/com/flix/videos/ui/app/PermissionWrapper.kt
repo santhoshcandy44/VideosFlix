@@ -43,7 +43,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.flix.videos.ui.utils.findActivity
-import com.flix.videos.ui.utils.shortToast
 
 @Composable
 fun PermissionWrapper(
@@ -55,11 +54,11 @@ fun PermissionWrapper(
     var showPermissionRationaleDialog by remember { mutableStateOf(false) }
     var showPermissionAllowDialog by remember { mutableStateOf(false) }
 
-    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         Manifest.permission.READ_MEDIA_VIDEO       // Android 13+
-    } else {
+    else
         Manifest.permission.READ_EXTERNAL_STORAGE  // Android 12 and below
-    }
+
 
     val shouldShowRequestPermissionRationale: () -> Boolean = {
         ActivityCompat.shouldShowRequestPermissionRationale(
@@ -71,14 +70,13 @@ fun PermissionWrapper(
     val readMediaPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
+        if (isGranted)
             onPermissionGranted()
-        } else {
+        else
             if (shouldShowRequestPermissionRationale())
                 showPermissionRationaleDialog = true
             else
                 showPermissionAllowDialog = true
-        }
     }
 
     val hasReadMediaPermissionIsGranted: () -> Boolean = {
@@ -93,9 +91,8 @@ fun PermissionWrapper(
     }
 
     LaunchedEffect(Unit) {
-        if (!hasReadMediaPermissionIsGranted()) {
+        if (!hasReadMediaPermissionIsGranted())
             permissionRequest()
-        }
     }
 
     content()
@@ -116,6 +113,7 @@ fun PermissionWrapper(
                     onPermissionGranted()
                 else
                     permissionRequest()
+                showPermissionAllowDialog = false
             },
             onClose = {
                 context.findActivity().finish()
@@ -136,8 +134,8 @@ fun PermissionWrapper(
             },
             onPermissionResultCheck = {
                 if (hasReadMediaPermissionIsGranted()) {
-                    showPermissionRationaleDialog = false
                     onPermissionGranted()
+                    showPermissionRationaleDialog = false
                 }
             },
             onClose = {
@@ -233,54 +231,47 @@ private fun PermissionRationaleDialog(
         )
     ) {
         BackHandler(onBack = onClose)
-        Box(
+
+        Card(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.4f))
-                .clickable(enabled = false) {},
-            contentAlignment = Alignment.Center
+                .padding(24.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
-            Card(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(8.dp)
+            Column(
+                modifier = Modifier.padding(20.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp)
+                Text(
+                    text = "Permission Required",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Permission Required",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(
-                            onClick = {
-                                settingsLauncher.launch(
-                                    Intent(
-                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                        Uri.fromParts("package", context.packageName, null)
-                                    )
+                    Button(
+                        onClick = {
+                            settingsLauncher.launch(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", context.packageName, null)
                                 )
-                            }
-                        ) {
-                            Text("Open Settings")
+                            )
                         }
+                    ) {
+                        Text("Open Settings")
                     }
                 }
             }

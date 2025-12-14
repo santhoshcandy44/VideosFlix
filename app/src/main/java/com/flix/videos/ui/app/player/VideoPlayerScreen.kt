@@ -196,6 +196,16 @@ fun VideoPlayerScreen(
 
     fun updatePipActions(): PictureInPictureParams.Builder {
         val actions = buildList {
+            add(
+                createPipAction(
+                    context = context,
+                    iconRes = R.drawable.ic_video_backward,
+                    title = "Backward",
+                    requestCode = EXTRA_CONTROL_BACKWARD,
+                    controlType = EXTRA_CONTROL_BACKWARD
+                )
+            )
+
             if (exoPlayer.isPlaying) {
                 add(
                     createPipAction(
@@ -225,16 +235,6 @@ fun VideoPlayerScreen(
                     title = "Forward",
                     requestCode = EXTRA_CONTROL_FORWARD,
                     controlType = EXTRA_CONTROL_FORWARD
-                )
-            )
-
-            add(
-                createPipAction(
-                    context = context,
-                    iconRes = R.drawable.ic_video_backward,
-                    title = "Backward",
-                    requestCode = EXTRA_CONTROL_BACKWARD,
-                    controlType = EXTRA_CONTROL_BACKWARD
                 )
             )
         }

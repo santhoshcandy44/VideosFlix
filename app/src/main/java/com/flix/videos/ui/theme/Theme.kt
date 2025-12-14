@@ -22,11 +22,13 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerLow = Color(red = 29, green = 27, blue = 32),
     surfaceContainerLowest = Color.Black,
     surfaceContainerHigh = Color(red = 29, green = 27, blue = 32),
+    surfaceContainerHighest = Color(red = 29, green = 27, blue = 32),
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground =  Color.White,
+    onBackground = Color.White,
     onSurface = Color.White,
+    onSurfaceVariant = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -40,11 +42,13 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainerLow = Color(red = 29, green = 27, blue = 32),
     surfaceContainerLowest = Color.Black,
     surfaceContainerHigh = Color(red = 29, green = 27, blue = 32),
+    surfaceContainerHighest = Color(red = 29, green = 27, blue = 32),
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,
-    onBackground =  Color.White,
-    onSurface =  Color.White,
+    onBackground = Color.White,
+    onSurface = Color.White,
+    onSurfaceVariant = Color.White
 )
 
 @Composable
