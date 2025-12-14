@@ -38,7 +38,7 @@ fun observeVolumeChanges(
             IntentFilter("android.media.VOLUME_CHANGED_ACTION")
         )
 
-        val maxVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val initial = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         onVolumeChanged(true, maxVolume, initial)
 

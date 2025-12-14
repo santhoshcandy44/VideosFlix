@@ -7,7 +7,6 @@ import android.media.MediaScannerConnection
 import android.util.Log
 import android.util.Rational
 import android.view.TextureView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -535,8 +534,6 @@ fun VideoPlayerScreen(
                     if (isMuted)
                         viewModel.setMuted(false)
                 }
-                Log.e("Player", "Changes ${volumeChangeState.progress}")
-
                 hideVolumeChangeJob?.cancel()
                 hideVolumeChangeJob = null
                 hideVolumeChangeJob = coroutineScope.launch {
