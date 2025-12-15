@@ -91,6 +91,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-smoothstreaming:1.8.0")
     implementation("androidx.media3:media3-ui:1.8.0")
     implementation("androidx.media3:media3-session:1.8.0")
+    implementation("androidx.media:media:1.7.0")
 }
 
 ksp {

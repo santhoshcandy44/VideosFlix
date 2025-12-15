@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -94,9 +95,6 @@ const val EXTRA_CONTROL_PAUSE = 2
 const val EXTRA_CONTROL_FORWARD = 3
 
 const val EXTRA_CONTROL_BACKWARD = 4
-
-//Close Player
-const val EXTRA_CONTROL_CLOSE = 0
 
 data class VerticalDragState(
     val progress: Float = 0f,
@@ -192,6 +190,8 @@ fun VideoPlayerScreen(
     }
 
     val isInPipMode = rememberIsInPipMode()
+    val latestPipState by rememberUpdatedState(isInPipMode)
+
     val pipBuilder = viewModel.pipBuilder
 
     fun updatePipActions(): PictureInPictureParams.Builder {
@@ -206,7 +206,7 @@ fun VideoPlayerScreen(
                 )
             )
 
-            if (exoPlayer.isPlaying) {
+            if (exoPlayer.isPlaying)
                 add(
                     createPipAction(
                         context = context,
@@ -216,7 +216,7 @@ fun VideoPlayerScreen(
                         controlType = EXTRA_CONTROL_PAUSE
                     )
                 )
-            } else {
+             else
                 add(
                     createPipAction(
                         context = context,
@@ -226,7 +226,6 @@ fun VideoPlayerScreen(
                         controlType = EXTRA_CONTROL_PLAY
                     )
                 )
-            }
 
             add(
                 createPipAction(
@@ -273,13 +272,19 @@ fun VideoPlayerScreen(
         } else
             if (autoHideJob == null)
                 createControlsHideJob()
-        if (isInPipMode) {
-            context.findActivity().setPictureInPictureParams(updatePipActions().build())
-        }
     }
 
     DisposableEffect(Unit) {
         val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                super.onPlayWhenReadyChanged(playWhenReady, reason)
+                if (!playWhenReady &&
+                    reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
+                ) {
+                    Log.e("PLAYER", "Audio focus lost")
+                }
+            }
+
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 super.onAudioSessionIdChanged(audioSessionId)
                 viewModel.onAudioSessionId(audioSessionId)
@@ -390,15 +395,7 @@ fun VideoPlayerScreen(
                 super.onVideoSizeChanged(videoSize)
                 videoWidth = videoSize.width
                 videoHeight = videoSize.height
-                Log.e("PLAYER", "On video size changed ${videoSize.width}")
-            }
-
-            override fun onRenderedFirstFrame() {
-                super.onRenderedFirstFrame()
-                /*  val size = exoPlayer.videoSize
-                  videoWidth = size.width
-                  videoHeight = size.height*/
-                Log.e("PLAYER", "First frame rendered")
+                Log.e("PLAYER", "On video size changed ${videoSize.width} ${videoSize.height}")
             }
 
             override fun onVolumeChanged(volume: Float) {
@@ -443,16 +440,16 @@ fun VideoPlayerScreen(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                val isPlayingOnReady = exoPlayer.playWhenReady
+                val isPlayingOnReady = isPlaying || exoPlayer.playWhenReady
                 if (isPlayingOnReady)
                     viewModel.startUpdatingProgress()
                 else
                     viewModel.stopUpdatingProgress()
                 viewModel.onUpdateIsPlaying(isPlayingOnReady)
-
-                if (!isPlaying) {
+                if (latestPipState)
+                    context.findActivity().setPictureInPictureParams(updatePipActions().build())
+                if (!isPlaying)
                     viewModel.saveMediaIemCurrentPosition()
-                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -503,18 +500,12 @@ fun VideoPlayerScreen(
             EXTRA_CONTROL_BACKWARD ->{
                 exoPlayer.seekToPreviousMediaItem()
             }
-
-            EXTRA_CONTROL_CLOSE -> {
-                context.findActivity().finish()
-            }
         }
-        context.findActivity().setPictureInPictureParams(updatePipActions().build())
     }
 
     observeUserLeaveHint {
-        if (isPlaying) {
+        if (isPlaying)
             context.findActivity().enterPictureInPictureMode(pipBuilder.build())
-        }
     }
 
     val density = LocalDensity.current
@@ -574,10 +565,29 @@ fun VideoPlayerScreen(
                         .then(
                             if (videoWidth > 0 && videoHeight > 0) Modifier.aspectRatio(
                                 videoWidth.toFloat() / videoHeight.toFloat()
-                            ) else Modifier.alpha(
-                                0f
-                            )
-                        ), factory = {
+                            ) else Modifier.alpha(0f)
+                        ).onGloballyPositioned { layoutCoordinates ->
+                            if(videoWidth > 0 && videoHeight > 0){
+                                val sourceRect =
+                                    layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
+                                pipBuilder.setSourceRectHint(sourceRect)
+
+                                val minRatio = 0.418410f
+                                val maxRatio = 2.39f
+
+                                val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
+                                val clamped = rawRatio.coerceIn(minRatio, maxRatio)
+
+                                pipBuilder.setAspectRatio(
+                                    Rational(
+                                        (clamped * 10000).toInt(),
+                                        10000
+                                    )
+                                )
+                                context.findActivity().setPictureInPictureParams(updatePipActions().build())
+                            }
+                    },
+                    factory = {
                         exoPlayer.setVideoTextureView(textureView)
                         textureView
                     }, update = { textureView ->
@@ -695,23 +705,24 @@ fun VideoPlayerScreen(
                                 ) else Modifier.alpha(0f)
                             )
                             .onGloballyPositioned { layoutCoordinates ->
-                                val sourceRect =
-                                    layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
-                                pipBuilder.setSourceRectHint(sourceRect)
+                                if(videoWidth > 0 && videoHeight > 0){
+                                    val sourceRect =
+                                        layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
+                                    pipBuilder.setSourceRectHint(sourceRect)
 
-                                val minRatio = 0.418410f
-                                val maxRatio = 2.39f
+                                    val minRatio = 0.418410f
+                                    val maxRatio = 2.39f
 
-                                val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
-                                val clamped = rawRatio.coerceIn(minRatio, maxRatio)
+                                    val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
+                                    val clamped = rawRatio.coerceIn(minRatio, maxRatio)
 
-                                pipBuilder.setAspectRatio(
-                                    Rational(
-                                        (clamped * 10000).toInt(),
-                                        10000
+                                    pipBuilder.setAspectRatio(
+                                        Rational(
+                                            (clamped * 10000).toInt(),
+                                            10000
+                                        )
                                     )
-                                )
-                                updatePipActions()
+                                }
                             }, factory = {
                             exoPlayer.setVideoTextureView(textureView)
                             textureView

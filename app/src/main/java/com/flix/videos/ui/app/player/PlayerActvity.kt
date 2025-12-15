@@ -1,6 +1,11 @@
 package com.flix.videos.ui.app.player
 
+import android.app.PictureInPictureParams
+import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,10 +22,9 @@ import org.koin.core.parameter.parametersOf
 
 
 class PlayerActivity : ComponentActivity() {
-    val volumeKeyChannel = Channel<Int>(
+    private val volumeKeyChannel = Channel<Int>(
         capacity = Channel.BUFFERED
     )
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,6 +34,9 @@ class PlayerActivity : ComponentActivity() {
         if (uri == null) {
             finish()
             return
+        }
+        if (isInPictureInPictureMode) {
+            Log.e("Player", "Is in picture in picture mode")
         }
         val group = intent.getStringExtra("group")
         val videoId = intent.getLongExtra("video_id", -1)
@@ -57,6 +64,21 @@ class PlayerActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (isInPictureInPictureMode) {
+            moveTaskToBack(false)
+            finish()
+            startActivity(
+                Intent(this, PlayerActivity::class.java).apply {
+                    data = intent.data
+                    replaceExtras(intent)
+                }
+            )
         }
     }
 

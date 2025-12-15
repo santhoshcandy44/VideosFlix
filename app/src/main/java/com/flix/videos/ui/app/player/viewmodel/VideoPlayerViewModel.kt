@@ -6,6 +6,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -153,7 +154,6 @@ class VideoPlayerViewModel
     val mediaSession = MediaSession.Builder(applicationContext, exoPlayer)
         .setId("headphone_session")
         .build()
-
 
     init {
         viewModelScope.launch {

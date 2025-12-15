@@ -36,9 +36,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.flix.videos.R
 import com.flix.videos.models.VideoInfo
-import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_CLOSE
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
 import com.flix.videos.ui.app.player.PlayerActivity
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.app.viewmodel.ViewMode
@@ -57,11 +54,6 @@ fun VideosScreen(
 
     val startPlayerActivity: (VideoInfo) -> Unit = { videoInfo ->
         viewModel.makeNewlyAddedMediaIsSeen(videoInfo.id)
-        val intent = Intent(ACTION_BROADCAST_CONTROL).apply {
-            `package` = context.packageName
-            putExtra(EXTRA_CONTROL_TYPE, EXTRA_CONTROL_CLOSE)
-        }
-        context.sendBroadcast(intent)
         context.startActivity(
             Intent(context, PlayerActivity::class.java)
                 .apply {
