@@ -706,9 +706,9 @@ fun VideoPlayerScreen(
                             )
                             .onGloballyPositioned { layoutCoordinates ->
                                 if(videoWidth > 0 && videoHeight > 0){
-                                    val sourceRect =
-                                        layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
-                                    pipBuilder.setSourceRectHint(sourceRect)
+                                  /*  val sourceRect =
+                                        layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()*/
+                                  /*  pipBuilder.setSourceRectHint(sourceRect)*/
 
                                     val minRatio = 0.418410f
                                     val maxRatio = 2.39f

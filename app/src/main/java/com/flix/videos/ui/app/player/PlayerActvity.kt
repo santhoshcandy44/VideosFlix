@@ -2,6 +2,7 @@ package com.flix.videos.ui.app.player
 
 import android.app.PictureInPictureParams
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -79,6 +80,17 @@ class PlayerActivity : ComponentActivity() {
                     replaceExtras(intent)
                 }
             )
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (!isInPictureInPictureMode) {
+            moveTaskToBack(false)
+            finish()
         }
     }
 
