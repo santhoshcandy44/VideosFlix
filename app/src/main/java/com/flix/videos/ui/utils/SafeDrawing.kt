@@ -34,7 +34,7 @@ fun SafeDrawing(
     isNavigationBarContrastEnforced: Boolean = false,
     isImePaddingEnabled: Boolean = true,
     isLightStatusBarEnabled : Boolean  = true,
-    content: @Composable () -> Unit,
+    content: @Composable () -> Unit
 ) {
     val window = LocalContext.current.findActivity().window
 
