@@ -11,7 +11,6 @@ import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -35,6 +34,7 @@ import com.flix.videos.ui.utils.findActivity
 
 @Composable
 fun PipPlayerScreen(
+    textureView: TextureView,
     mediaController: MediaController,
     videoWidth: Int,
     videoHeight: Int,
@@ -45,9 +45,6 @@ fun PipPlayerScreen(
     //Compose
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    //Player
-    val textureView = remember { TextureView(context) }
 
     //Pip
     val pipBuilder = viewModel.pipBuilder

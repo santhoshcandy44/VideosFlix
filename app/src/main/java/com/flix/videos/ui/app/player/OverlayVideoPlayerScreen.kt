@@ -53,6 +53,7 @@ import org.koin.core.parameter.parametersOf
 
 @Composable
 fun OverlayVideoPlayerScreen(
+    textureView: TextureView,
     videoInfo: VideoInfo,
     isPlaying: Boolean,
     mediaController: MediaController,
@@ -61,14 +62,12 @@ fun OverlayVideoPlayerScreen(
     attachToDraggable: (View, () -> WindowLayoutState, () -> Unit) -> Unit,
     updateWindowSize: (Int, Int, Boolean) -> Unit,
 ) {
-    val context = LocalContext.current
     val serviceMediaControllerManager: ServiceMediaControllerManager =
         koinInject<ServiceMediaControllerManager> {
             parametersOf("overlay videos screen")
         }
     var videoWidth by remember { mutableIntStateOf(videoInfo.width) }
     var videoHeight by remember { mutableIntStateOf(videoInfo.height) }
-    val textureView = remember { TextureView(context) }
     val latestWindowLayoutState by rememberUpdatedState(windowLayoutState)
 
     LaunchedEffect(windowLayoutState) {

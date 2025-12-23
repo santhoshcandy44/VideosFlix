@@ -28,6 +28,7 @@ import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -37,7 +38,7 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
     private val windowLayoutState = MutableStateFlow(WindowLayoutState.NONE)
     private var windowManager: WindowManager? = null
     private lateinit var layoutParams: WindowManager.LayoutParams
-    private lateinit var overlayView: ComposeView
+    private var overlayView: ComposeView? = null
 
     companion object X {
         @Volatile
@@ -47,28 +48,44 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
     override fun onCreate() {
         isRunning = true
         super.onCreate()
+
+        layoutParams = WindowManager.LayoutParams().apply {
+            width = WindowManager.LayoutParams.WRAP_CONTENT
+            height = WindowManager.LayoutParams.WRAP_CONTENT
+            type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+
+            format = PixelFormat.TRANSLUCENT
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+
+        windowManager = applicationContext.getSystemService(WINDOW_SERVICE)
+                as WindowManager
+
+        windowLayoutState.value =
+            getOverlayInsetsAndBounds(this@PipPlayerService)
+
+        val windowLayoutState = windowLayoutState.value
+        val fullWidthPx = windowLayoutState.widthPx
+        val fullHeightPx = windowLayoutState.heightPx
+
+        val maxX = fullWidthPx - windowLayoutState.insets.right
+        val maxY = fullHeightPx - windowLayoutState.insets.bottom
+
+        layoutParams.x = maxX
+        layoutParams.y = maxY
+        disableLayoutMovements(layoutParams)
+
         lifecycleScope.launch {
-            videoParams.collectLatest { videoParams ->
-                if (videoParams != null) {
-                    layoutParams = WindowManager.LayoutParams().apply {
-                        width = WindowManager.LayoutParams.WRAP_CONTENT
-                        height = WindowManager.LayoutParams.WRAP_CONTENT
-                        type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                        flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-
-                        format = PixelFormat.TRANSLUCENT
-                        gravity = Gravity.TOP or Gravity.START
-                        x = 0
-                        y = 0
-                    }
-
-                    windowManager = applicationContext.getSystemService(WINDOW_SERVICE)
-                            as WindowManager
-
+            videoParams
+                .filterNotNull()
+                .collectLatest { videoParams ->
                     overlayView = ComposeView(this@PipPlayerService).apply {
                         setViewTreeLifecycleOwner(this@PipPlayerService)
                         setViewTreeViewModelStoreOwner(this@PipPlayerService)
@@ -80,24 +97,9 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
 
                     windowManager!!.addView(overlayView, layoutParams)
 
-                    windowLayoutState.value =
-                        getOverlayInsetsAndBounds(this@PipPlayerService)
-
-                    val windowLayoutState = windowLayoutState.value
-                    val fullWidthPx = windowLayoutState.widthPx
-                    val fullHeightPx = windowLayoutState.heightPx
-
-                    val maxX = fullWidthPx - windowLayoutState.insets.right
-                    val maxY = fullHeightPx - windowLayoutState.insets.bottom
-
-                    layoutParams.x = maxX
-                    layoutParams.y = maxY
-                    disableLayoutMovements(layoutParams)
-
-                    overlayView.post {
+                    overlayView!!.post {
                         windowManager!!.updateViewLayout(overlayView, layoutParams)
                     }
-                }
             }
         }
     }
@@ -146,8 +148,8 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
                 privateFlagsValue or noAnimFlag
             )
 
-        } catch (e: ClassNotFoundException) {
-        } catch (e: Exception) {
+        } catch (_: ClassNotFoundException) {
+        } catch (_: Exception) {
         }
     }
 
@@ -191,7 +193,7 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
             layoutParams.y = minOf(oldY, maxY)
         }
 
-        overlayView.post {
+        overlayView!!.post {
             windowManager!!.updateViewLayout(overlayView, layoutParams)
         }
     }
@@ -255,7 +257,7 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
                             maxOf(availableDY, windowLayoutState.insets.top + margin)
                         )
 
-                        overlayView.post {
+                        overlayView!!.post {
                             windowManager!!.updateViewLayout(overlayView, layoutParams)
                         }
                     }
@@ -287,7 +289,9 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
 
     override fun onDestroy() {
         isRunning = false
-        windowManager?.removeView(overlayView)
+        if (overlayView?.isAttachedToWindow == true) {
+            windowManager?.removeView(overlayView)
+        }
         Log.e("Player", "onDestroy: PipPlayerService")
         super.onDestroy()
     }

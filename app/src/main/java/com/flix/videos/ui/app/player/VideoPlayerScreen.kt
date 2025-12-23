@@ -2,7 +2,6 @@ package com.flix.videos.ui.app.player
 
 import android.content.Intent
 import android.media.MediaScannerConnection
-import android.util.Log
 import android.view.TextureView
 import android.view.View
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -12,12 +11,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -27,10 +24,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.SubtitleView
-import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
-import com.flix.videos.ui.app.player.common.observerPipModeChange
 import com.flix.videos.ui.app.player.common.rememberIsInPipMode
 import com.flix.videos.ui.app.player.observables.observerLifeCycleEvent
+import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
 import com.flix.videos.ui.app.player.viewmodel.AudioTrackInfo
 import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
@@ -71,7 +67,7 @@ fun VideoPlayerScreen(
     updateWindowSize: (Int, Int, Boolean) -> Unit = { _, _, _ -> }
 ) {
     val mediaSessionControllerState by viewModel.controllerState.collectAsState()
-    val exoPlayer = mediaSessionControllerState ?: return
+    val mediaController = mediaSessionControllerState ?: return
 
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
     var videoWidth by remember { mutableIntStateOf(currentPlayingVideoInfo.width) }
@@ -95,7 +91,7 @@ fun VideoPlayerScreen(
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
                     viewModel.saveMediaIemCurrentPosition()
-                    exoPlayer.pause()
+                    mediaController.pause()
                 }
                 else -> {}
             }
@@ -104,15 +100,15 @@ fun VideoPlayerScreen(
 
     //Player Listener
     DisposableEffect(Unit) {
-        videoWidth = exoPlayer.videoSize.width
-        videoHeight = exoPlayer.videoSize.height
+        videoWidth = mediaController.videoSize.width
+        videoHeight = mediaController.videoSize.height
         val listener = object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 super.onPlayWhenReadyChanged(playWhenReady, reason)
                 if (!playWhenReady &&
                     reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
                 ) {
-                    exoPlayer.pause()
+                    mediaController.pause()
                 }
             }
 
@@ -125,9 +121,9 @@ fun VideoPlayerScreen(
                 super.onMediaItemTransition(mediaItem, reason)
                 when (reason) {
                     Player.MEDIA_ITEM_TRANSITION_REASON_AUTO -> {
-                        val previousIndex = exoPlayer.previousMediaItemIndex
+                        val previousIndex = mediaController.previousMediaItemIndex
                         if (previousIndex != C.INDEX_UNSET) {
-                            val prevItem = exoPlayer.getMediaItemAt(previousIndex)
+                            val prevItem = mediaController.getMediaItemAt(previousIndex)
                             val prevUri = prevItem.localConfiguration?.uri
                             if (prevUri != null)
                                 viewModel.clearMediaItemPosition(prevUri)
@@ -150,7 +146,7 @@ fun VideoPlayerScreen(
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     val pos = viewModel.getMediaIemLastPosition(uri)
                     if (pos > 0L)
-                        exoPlayer.seekTo(exoPlayer.currentMediaItemIndex, pos)
+                        mediaController.seekTo(mediaController.currentMediaItemIndex, pos)
                 }
             }
 
@@ -202,7 +198,7 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                    exoPlayer.currentMediaItem?.mediaId
+                    mediaController.currentMediaItem?.mediaId
                         ?.toLongOrDefault(-1)
                         ?.takeIf { it != -1L }
                         ?.let(viewModel::getCurrentPlayingVideoInfo)
@@ -248,31 +244,31 @@ fun VideoPlayerScreen(
                     textureView.keepScreenOn = true
                 }
                 if (playbackState == Player.STATE_READY) {
-                    textureView.keepScreenOn = exoPlayer.isPlaying
+                    textureView.keepScreenOn = mediaController.isPlaying
                 }
                 if (playbackState == Player.STATE_ENDED) {
                     viewModel.stopUpdatingProgress()
                     viewModel.onUpdateCurrentDurationMillis(totalDurationMillis)
                     viewModel.onUpdateCurrentDurationMillis(0)
-                    exoPlayer.stop()
-                    exoPlayer.playWhenReady = false
+                    mediaController.stop()
+                    mediaController.playWhenReady = false
                     textureView.keepScreenOn = false
-                    val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri
+                    val currentUri = mediaController.currentMediaItem?.localConfiguration?.uri
                     if (currentUri != null)
                         viewModel.clearMediaItemPosition(currentUri)
-                    val firstUri = exoPlayer.getMediaItemAt(0).localConfiguration?.uri
+                    val firstUri = mediaController.getMediaItemAt(0).localConfiguration?.uri
                     val pos = if (firstUri != null)
                         viewModel.getMediaIemLastPosition(firstUri)
                     else
                         0
-                    exoPlayer.seekTo(0, pos)
-                    exoPlayer.prepare()
+                    mediaController.seekTo(0, pos)
+                    mediaController.prepare()
                     viewModel.onSliderValueChange(0f)
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                val isPlayingOnReady = isPlaying || exoPlayer.playWhenReady
+                val isPlayingOnReady = isPlaying || mediaController.playWhenReady
                 if (isPlayingOnReady)
                     viewModel.startUpdatingProgress()
                 else
@@ -302,45 +298,57 @@ fun VideoPlayerScreen(
                 }
             }
         }
-        exoPlayer.addListener(listener)
+        mediaController.addListener(listener)
         onDispose {
-            exoPlayer.removeListener(listener)
+            mediaController.removeListener(listener)
         }
     }
 
     if (isOverlayWindow) {
         OverlayVideoPlayerScreen(
+            textureView = textureView,
             videoInfo = currentPlayingVideoInfo,
             isPlaying = isPlaying,
-            mediaController = exoPlayer,
-            modifier = Modifier,
+            mediaController = mediaController,
+            modifier = modifier,
             windowLayoutState = windowLayoutState,
             attachToDraggable = attachDragBehavior,
             updateWindowSize = updateWindowSize
         )
     } else {
+        DisposableEffect(Unit) {
+            onDispose {
+                mediaController.clearVideoTextureView(textureView)
+            }
+        }
+
         val isBackgroundPlayEnabled by viewModel.isBackgroundVideoPlayModeEnabled.collectAsState()
         val isInPipMode = rememberIsInPipMode()
 
         if (!isBackgroundPlayEnabled && isInPipMode) {
             PipPlayerScreen(
-                mediaController = exoPlayer,
+                textureView = textureView,
+                mediaController = mediaController,
                 videoWidth = videoWidth,
                 videoHeight = videoHeight,
                 isAudioOnly = isAudioOnly,
                 viewModel = viewModel,
-                modifier = Modifier
+                modifier = modifier
             )
 
         } else {
             LargeVideoPlayerScreen(
+                textureView = textureView,
                 volumeKeyChannel = volumeKeyChannel,
-                exoPlayer = exoPlayer,
+                exoPlayer = mediaController,
                 videoWidth = videoWidth,
                 videoHeight = videoHeight,
                 onPopUp = onPopUp,
                 viewModel = viewModel,
-                modifier = Modifier
+                modifier = modifier,
+                onUpdateSubtitleRef = { subtitleView ->
+                    subtitleViewRef.set(subtitleView)
+                }
             )
         }
     }

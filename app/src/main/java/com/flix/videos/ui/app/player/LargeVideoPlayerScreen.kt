@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -68,7 +67,6 @@ import com.flix.videos.ui.app.player.observables.rememberDeviceOrientationFlow
 import com.flix.videos.ui.app.player.service.CMD_START_AUDIO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.CMD_START_VIDEO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
-import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
 import com.flix.videos.ui.utils.findActivity
 import kotlinx.coroutines.Job
@@ -78,19 +76,20 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.absoluteValue
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LargeVideoPlayerScreen(
+    textureView: TextureView,
     volumeKeyChannel: Channel<Int>,
     exoPlayer: MediaController,
     videoWidth: Int,
     videoHeight: Int,
-    onPopUp: () -> Unit,
     viewModel: VideoPlayerViewModel,
+    onUpdateSubtitleRef:(SubtitleView)-> Unit,
+    onPopUp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     //Currently Playing Media Info
@@ -133,10 +132,6 @@ fun LargeVideoPlayerScreen(
 
     var subtitlePadding by rememberSaveable { mutableIntStateOf(0) }
 
-    //Player
-    val textureView = remember { TextureView(context) }
-    val subtitleViewRef = remember { AtomicReference<SubtitleView?>(null) }
-
     //Player Controls
     val isLandscape = isLandscape()
     val thumbSize = DpSize(14.dp, 14.dp)
@@ -160,7 +155,6 @@ fun LargeVideoPlayerScreen(
     val pipBuilder = viewModel.pipBuilder
 
     LaunchedEffect(isLandscape) {
-        Log.e("isLandscape", "${isLandscape}")
         if (isLandscape)
             enterFullScreenMode(context.findActivity())
     }
@@ -179,7 +173,6 @@ fun LargeVideoPlayerScreen(
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
-            exoPlayer.clearVideoTextureView(textureView)
         }
     }
 
@@ -412,7 +405,7 @@ fun LargeVideoPlayerScreen(
 
                 SubTitleView(
                     onSetView = {
-                        subtitleViewRef.set(this)
+                        onUpdateSubtitleRef(this)
                     },
                     modifier = Modifier.then(
                         if (isControlsVisible) Modifier.padding(
