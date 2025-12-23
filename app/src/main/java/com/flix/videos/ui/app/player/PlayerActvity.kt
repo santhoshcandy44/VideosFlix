@@ -7,13 +7,17 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.OptIn
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.media3.common.util.UnstableApi
+import com.flix.videos.ui.app.player.service.player.managers.MediaControllerManager
 import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.theme.AppTheme
 import com.flix.videos.ui.utils.SafeDrawing
 import kotlinx.coroutines.channels.Channel
+import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -22,21 +26,34 @@ class PlayerActivity : ComponentActivity() {
         capacity = Channel.BUFFERED
     )
 
+    private val mediaControllerManager: MediaControllerManager by inject {
+        parametersOf(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installSplashScreen()
         enableEdgeToEdge()
+
         val uri = intent.data
-        if (uri == null) {
+        if (uri == null && intent.action != "ACTION_NOTIFICATION_MEDIA_PLAYBACK") {
             finish()
             return
         }
+
+        val configuration = resources.configuration
+        when (configuration.orientation) {
+            Configuration.ORIENTATION_PORTRAIT -> {
+                exitFullScreenMode(this)
+            }
+            Configuration.ORIENTATION_LANDSCAPE -> {
+                enterFullScreenMode(this)
+            }
+        }
+
         val group = intent.getStringExtra("group")
         val videoId = intent.getLongExtra("video_id", -1)
-        val title = intent.getStringExtra("title")
-        val videoWidth = intent.getIntExtra("video_width", 0)
-        val videoHeight = intent.getIntExtra("video_height", 0)
-        val totalDurationMillis = intent.getLongExtra("total_duration", 0L)
+
         setContent {
             AppTheme {
                 SafeDrawing(isFullScreenMode = true) {
@@ -45,15 +62,19 @@ class PlayerActivity : ComponentActivity() {
                             volumeKeyChannel = volumeKeyChannel,
                             viewModel = koinViewModel(parameters = {
                                 parametersOf(
+                                    false,
                                     VideoParams(
                                         group = group,
                                         id = videoId
-                                    )
+                                    ),
+                                    mediaControllerManager,
+                                    null
                                 )
                             }),
                             onPopUp = {
                                 this@PlayerActivity.finish()
-                            })
+                            }
+                        )
                     }
                 }
             }
@@ -65,6 +86,7 @@ class PlayerActivity : ComponentActivity() {
         setIntent(intent)
         if (isInPictureInPictureMode) {
             moveTaskToBack(false)
+            mediaControllerManager.releaseMediaController()
             finish()
             startActivity(
                 Intent(this, PlayerActivity::class.java).apply {
@@ -72,17 +94,6 @@ class PlayerActivity : ComponentActivity() {
                     replaceExtras(intent)
                 }
             )
-        }
-    }
-
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (!isInPictureInPictureMode) {
-            moveTaskToBack(false)
-            finish()
         }
     }
 
@@ -97,5 +108,10 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enterFullScreenMode(this)
     }
 }

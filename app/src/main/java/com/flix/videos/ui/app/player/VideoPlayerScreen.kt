@@ -1,54 +1,23 @@
 package com.flix.videos.ui.app.player
 
-import android.app.PictureInPictureParams
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.media.MediaScannerConnection
 import android.util.Log
-import android.util.Rational
 import android.view.TextureView
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Audiotrack
+import android.view.View
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toAndroidRectF
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.graphics.toRect
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -58,31 +27,17 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.SubtitleView
-import com.flix.videos.R
-import com.flix.videos.models.VideoInfo
-import com.flix.videos.ui.app.player.ExoplayerSeekDirection.SEEK_BACKWARD
-import com.flix.videos.ui.app.player.ExoplayerSeekDirection.SEEK_FORWARD
-import com.flix.videos.ui.app.player.common.isLandscape
+import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
+import com.flix.videos.ui.app.player.common.observerPipModeChange
 import com.flix.videos.ui.app.player.common.rememberIsInPipMode
-import com.flix.videos.ui.app.player.observables.createPipAction
-import com.flix.videos.ui.app.player.observables.observePipRemoteActions
-import com.flix.videos.ui.app.player.observables.observeUserLeaveHint
-import com.flix.videos.ui.app.player.observables.observeVolumeChanges
 import com.flix.videos.ui.app.player.observables.observerLifeCycleEvent
-import com.flix.videos.ui.app.player.observables.rememberDeviceOrientationFlow
 import com.flix.videos.ui.app.player.viewmodel.AudioTrackInfo
 import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
-import com.flix.videos.ui.utils.findActivity
 import com.flix.videos.ui.utils.shortToast
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.launch
+import okhttp3.internal.toLongOrDefault
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.math.absoluteValue
 
 // Constant for broadcast receiver
 const val ACTION_BROADCAST_CONTROL = "PRIVATE_PLAYER_BROADCAST"
@@ -101,194 +56,64 @@ data class VerticalDragState(
     val isDragging: Boolean = false
 )
 
+
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideoPlayerScreen(
-    volumeKeyChannel: Channel<Int>,
-    onPopUp: () -> Unit, viewModel: VideoPlayerViewModel,
-    modifier: Modifier = Modifier
+    viewModel: VideoPlayerViewModel,
+    modifier: Modifier = Modifier,
+    volumeKeyChannel: Channel<Int> = Channel(),
+    isOverlayWindow: Boolean = false,
+    windowLayoutState: WindowLayoutState = WindowLayoutState.NONE,
+    onPopUp: () -> Unit = {},
+    attachDragBehavior: (View, () -> WindowLayoutState, () -> Unit) -> Unit = { _, _, _ -> },
+    updateWindowSize: (Int, Int, Boolean) -> Unit = { _, _, _ -> }
 ) {
-    val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
+    val mediaSessionControllerState by viewModel.controllerState.collectAsState()
+    val exoPlayer = mediaSessionControllerState ?: return
 
-    var videoWidth by remember { mutableIntStateOf(0) }
-    var videoHeight by remember { mutableIntStateOf(0) }
+    val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
+    var videoWidth by remember { mutableIntStateOf(currentPlayingVideoInfo.width) }
+    var videoHeight by remember { mutableIntStateOf(currentPlayingVideoInfo.height) }
     val totalDurationMillis = currentPlayingVideoInfo.duration
 
-    val exoPlayer = viewModel.exoPlayer
-    val isPlaying by viewModel.isPlaying.collectAsState()
-    val sliderProgress by viewModel.sliderProgress.collectAsState()
-    val currentDurationMillis by viewModel.currentDurationMillis.collectAsState()
-    val isControlsVisible by viewModel.isControlsVisible.collectAsState()
-    val isMuted by viewModel.isMuted.collectAsState()
-    val isLockedOrientation by viewModel.isLockedOrientation.collectAsState()
-
     val isAudioOnly by viewModel.isAudioOnly.collectAsState()
-    val playBackSpeeds = viewModel.playBackSpeeds
-    val currentPlayPackSpeed by viewModel.currentPlayPackSpeed.collectAsState()
-
-    val currentRepeatMode by viewModel.currentRepeatMode.collectAsState()
-    val currentAudioTrack by viewModel.currentAudioTrack.collectAsState()
-    val isSubtitleEnabled by viewModel.isSubtitleEnabled.collectAsState()
-    val currentSubtitleTrack by viewModel.currentSubtitleTrack.collectAsState()
-    val localSubtitles by viewModel.localSubtitles.collectAsState()
-    val currentLocalSubtitle by viewModel.currentLocalSubtitle.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-
     if (isLoading) return
 
-    val context = LocalContext.current
+    val isPlaying by viewModel.isPlaying.collectAsState()
 
-    val configuration = LocalConfiguration.current
-    val orientation = configuration.orientation
-    val deviceOrientationFlow = rememberDeviceOrientationFlow()
-    val deviceOrientation by deviceOrientationFlow.collectAsState()
-    var lastOrientation by rememberSaveable { mutableIntStateOf(orientation) }
-    var doubleTapSeekDirection by rememberSaveable {
-        mutableIntStateOf(
-            ExoplayerSeekDirection.SEEK_NONE
-        )
-    }
+    val context = LocalContext.current
 
     val textureView = remember { TextureView(context) }
     val subtitleViewRef = remember { AtomicReference<SubtitleView?>(null) }
 
-    val thumbSize = DpSize(14.dp, 14.dp)
-    val trackHeight = 4.dp
-
-    var autoHideJob by remember { mutableStateOf<Job?>(null) }
-    val coroutineScope = rememberCoroutineScope()
-    val isLandscape = isLandscape()
-
-    var subtitlePadding by rememberSaveable { mutableIntStateOf(0) }
-
-    LaunchedEffect(isLandscape) {
-        if (isLandscape)
-            enterFullScreenMode(context.findActivity())
-    }
-
-    fun cancelControlsHideJob() {
-        autoHideJob?.cancel()
-        autoHideJob = null
-    }
-
-    fun createControlsHideJob(timeMillis: Long = 5000) {
-        autoHideJob = coroutineScope.launch {
-            delay(timeMillis)
-            enterFullScreenMode(context.findActivity())
-            viewModel.hideControls()
-        }
-    }
-
-    fun showPlayerControls(isLandscape: Boolean, scheduleControlsHideJob: Boolean = true) {
-        cancelControlsHideJob()
-        viewModel.showControls()
-        if (!isLandscape)
-            exitFullScreenMode(context.findActivity())
-        if (scheduleControlsHideJob)
-            createControlsHideJob()
-    }
-
-    val isInPipMode = rememberIsInPipMode()
-    val latestPipState by rememberUpdatedState(isInPipMode)
-
-    val pipBuilder = viewModel.pipBuilder
-
-    fun updatePipActions(): PictureInPictureParams.Builder {
-        val actions = buildList {
-            add(
-                createPipAction(
-                    context = context,
-                    iconRes = R.drawable.ic_video_backward,
-                    title = "Backward",
-                    requestCode = EXTRA_CONTROL_BACKWARD,
-                    controlType = EXTRA_CONTROL_BACKWARD
-                )
-            )
-
-            if (exoPlayer.isPlaying)
-                add(
-                    createPipAction(
-                        context = context,
-                        iconRes = R.drawable.ic_video_pause,
-                        title = "Pause",
-                        requestCode = EXTRA_CONTROL_PAUSE,
-                        controlType = EXTRA_CONTROL_PAUSE
-                    )
-                )
-             else
-                add(
-                    createPipAction(
-                        context = context,
-                        iconRes = R.drawable.ic_video_play,
-                        title = "Play",
-                        requestCode = EXTRA_CONTROL_PLAY,
-                        controlType = EXTRA_CONTROL_PLAY
-                    )
-                )
-
-            add(
-                createPipAction(
-                    context = context,
-                    iconRes = R.drawable.ic_video_forward,
-                    title = "Forward",
-                    requestCode = EXTRA_CONTROL_FORWARD,
-                    controlType = EXTRA_CONTROL_FORWARD
-                )
-            )
-        }
-        return pipBuilder.setActions(actions)
-    }
-
-    LifecycleResumeEffect(Unit) {
-        if (isLockedOrientation) return@LifecycleResumeEffect onPauseOrDispose {}
-        showPlayerControls(isLandscape)
-        onPauseOrDispose {}
-    }
-
-    LaunchedEffect(deviceOrientation) {
-        if (isLockedOrientation) return@LaunchedEffect
-        if (deviceOrientation != lastOrientation) {
-            context.findActivity().requestedOrientation =
-                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
-    observerLifeCycleEvent { event ->
-        when (event) {
-            Lifecycle.Event.ON_STOP -> {
-                viewModel.saveMediaIemCurrentPosition()
-                exoPlayer.pause()
+    //Player Pause When OnStop Occurs
+    if (!isOverlayWindow) {
+        observerLifeCycleEvent { event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    viewModel.saveMediaIemCurrentPosition()
+                    exoPlayer.pause()
+                }
+                else -> {}
             }
-
-            else -> {}
         }
     }
 
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) {
-            cancelControlsHideJob()
-            showPlayerControls(isLandscape, false)
-        } else
-            if (autoHideJob == null)
-                createControlsHideJob()
-    }
-
+    //Player Listener
     DisposableEffect(Unit) {
+        videoWidth = exoPlayer.videoSize.width
+        videoHeight = exoPlayer.videoSize.height
         val listener = object : Player.Listener {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 super.onPlayWhenReadyChanged(playWhenReady, reason)
                 if (!playWhenReady &&
                     reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
                 ) {
-                    Log.e("PLAYER", "Audio focus lost")
+                    exoPlayer.pause()
                 }
-            }
-
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                super.onAudioSessionIdChanged(audioSessionId)
-                viewModel.onAudioSessionId(audioSessionId)
-                viewModel.setGainMillibels(1500)
             }
 
             override fun onCues(cueGroup: CueGroup) {
@@ -315,16 +140,18 @@ fun VideoPlayerScreen(
                             viewModel.clearMediaItemPosition(currentUri)
                     }
                 }
-                (mediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
-                    viewModel.setCurrentPlayingVideoInfo(videoInfo)
-                }
+
+                mediaItem?.mediaId
+                    ?.toLongOrDefault(-1)
+                    ?.takeIf { it != -1L }
+                    ?.let(viewModel::getCurrentPlayingVideoInfo)
+                    ?.let(viewModel::setCurrentPlayingVideoInfo)
 
                 mediaItem?.localConfiguration?.uri?.let { uri ->
                     val pos = viewModel.getMediaIemLastPosition(uri)
                     if (pos > 0L)
                         exoPlayer.seekTo(exoPlayer.currentMediaItemIndex, pos)
                 }
-                Log.e("PLAYER", "Transition item changed $reason")
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -375,17 +202,27 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                    (exoPlayer.currentMediaItem?.localConfiguration?.tag as? VideoInfo)?.let { videoInfo ->
-                        viewModel.setCurrentPlayingVideoInfo(
-                            videoInfo.copy(
-                                audioTrackInfos = audioTracks,
-                                subtitleTrackInfos = subtitleTrackInfos
+                    exoPlayer.currentMediaItem?.mediaId
+                        ?.toLongOrDefault(-1)
+                        ?.takeIf { it != -1L }
+                        ?.let(viewModel::getCurrentPlayingVideoInfo)
+                        ?.also { videoInfo ->
+                            viewModel.setCurrentPlayingVideoInfo(
+                                videoInfo.copy(
+                                    audioTrackInfos = audioTracks,
+                                    subtitleTrackInfos = subtitleTrackInfos
+                                )
                             )
-                        )
-                        viewModel.getMediaIemAudioTrack(videoInfo.uri)?.let {
-                            viewModel.switchAudioTrack(it.first, it.second)
+
+                            viewModel.getMediaIemAudioTrack(videoInfo.uri)
+                                ?.let { (groupIndex, trackIndex) ->
+                                    viewModel.switchAudioTrack(
+                                        groupIndex,
+                                        trackIndex
+                                    )
+                                }
                         }
-                    }
+
                     viewModel.setCurrentAudioTrack()
                     viewModel.setCurrentSubtitleTrack()
                 }
@@ -395,7 +232,6 @@ fun VideoPlayerScreen(
                 super.onVideoSizeChanged(videoSize)
                 videoWidth = videoSize.width
                 videoHeight = videoSize.height
-                Log.e("PLAYER", "On video size changed ${videoSize.width} ${videoSize.height}")
             }
 
             override fun onVolumeChanged(volume: Float) {
@@ -412,10 +248,6 @@ fun VideoPlayerScreen(
                     textureView.keepScreenOn = true
                 }
                 if (playbackState == Player.STATE_READY) {
-                    if (doubleTapSeekDirection != ExoplayerSeekDirection.SEEK_NONE) {
-                        doubleTapSeekDirection = ExoplayerSeekDirection.SEEK_NONE
-                        viewModel.onFastSeekFinished()
-                    }
                     textureView.keepScreenOn = exoPlayer.isPlaying
                 }
                 if (playbackState == Player.STATE_ENDED) {
@@ -446,8 +278,6 @@ fun VideoPlayerScreen(
                 else
                     viewModel.stopUpdatingProgress()
                 viewModel.onUpdateIsPlaying(isPlayingOnReady)
-                if (latestPipState)
-                    context.findActivity().setPictureInPictureParams(updatePipActions().build())
                 if (!isPlaying)
                     viewModel.saveMediaIemCurrentPosition()
             }
@@ -475,426 +305,43 @@ fun VideoPlayerScreen(
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
-            exoPlayer.stop()
-            exoPlayer.release()
         }
     }
 
-    observePipRemoteActions { intent ->
-        if ((intent == null) || (intent.action != ACTION_BROADCAST_CONTROL)) {
-            return@observePipRemoteActions
-        }
-        when (intent.getIntExtra(EXTRA_CONTROL_TYPE, 0)) {
-            EXTRA_CONTROL_PAUSE -> {
-                exoPlayer.pause()
-            }
+    if (isOverlayWindow) {
+        OverlayVideoPlayerScreen(
+            videoInfo = currentPlayingVideoInfo,
+            isPlaying = isPlaying,
+            mediaController = exoPlayer,
+            modifier = Modifier,
+            windowLayoutState = windowLayoutState,
+            attachToDraggable = attachDragBehavior,
+            updateWindowSize = updateWindowSize
+        )
+    } else {
+        val isBackgroundPlayEnabled by viewModel.isBackgroundVideoPlayModeEnabled.collectAsState()
+        val isInPipMode = rememberIsInPipMode()
 
-            EXTRA_CONTROL_PLAY -> {
-                exoPlayer.play()
-            }
-
-            EXTRA_CONTROL_FORWARD ->{
-                exoPlayer.seekToNextMediaItem()
-            }
-
-            EXTRA_CONTROL_BACKWARD ->{
-                exoPlayer.seekToPreviousMediaItem()
-            }
-        }
-    }
-
-    observeUserLeaveHint {
-        if (isPlaying)
-            context.findActivity().enterPictureInPictureMode(pipBuilder.build())
-    }
-
-    val density = LocalDensity.current
-    val verticalProgressBarSize = DpSize(24.dp, 160.dp)
-    val verticalProgressBarHeightPx = with(density) { verticalProgressBarSize.height.toPx() }
-
-    var volumeChangeState by remember { mutableStateOf(VerticalDragState()) }
-    var volumeVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
-    var brightnessVerticalDragState by remember { mutableStateOf(VerticalDragState()) }
-    var hideVolumeChangeJob by remember { mutableStateOf<Job?>(null) }
-
-    LaunchedEffect(Unit) {
-        volumeKeyChannel
-            .receiveAsFlow()
-            .collectLatest {
-                volumeChangeState = volumeChangeState.copy(isDragging = true)
-                if (volumeChangeState.progress > 0) {
-                    if (isMuted)
-                        viewModel.setMuted(false)
-                }
-                hideVolumeChangeJob?.cancel()
-                hideVolumeChangeJob = null
-                hideVolumeChangeJob = coroutineScope.launch {
-                    delay(3000)
-                    volumeChangeState = volumeChangeState.copy(isDragging = false)
-                }
-            }
-    }
-
-    observeVolumeChanges { _, maxVolume, volume ->
-        viewModel.setMuted(volume == 0)
-        volumeChangeState =
-            volumeChangeState.copy(progress = volume.toFloat() / maxVolume.toFloat())
-    }
-
-    var showSubtitleSettings by remember { mutableStateOf(false) }
-    var showMorePlayerSettings by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isInPipMode) {
-            if (isAudioOnly) {
-                Icon(
-                    imageVector = Icons.Default.Audiotrack,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .align(Alignment.Center),
-                    tint = Color.White.copy(0.6f)
-                )
-            } else {
-                AndroidView(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .then(
-                            if (videoWidth > 0 && videoHeight > 0) Modifier.aspectRatio(
-                                videoWidth.toFloat() / videoHeight.toFloat()
-                            ) else Modifier.alpha(0f)
-                        ).onGloballyPositioned { layoutCoordinates ->
-                            if(videoWidth > 0 && videoHeight > 0){
-                                val sourceRect =
-                                    layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
-                                pipBuilder.setSourceRectHint(sourceRect)
-
-                                val minRatio = 0.418410f
-                                val maxRatio = 2.39f
-
-                                val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
-                                val clamped = rawRatio.coerceIn(minRatio, maxRatio)
-
-                                pipBuilder.setAspectRatio(
-                                    Rational(
-                                        (clamped * 10000).toInt(),
-                                        10000
-                                    )
-                                )
-                                context.findActivity().setPictureInPictureParams(updatePipActions().build())
-                            }
-                    },
-                    factory = {
-                        exoPlayer.setVideoTextureView(textureView)
-                        textureView
-                    }, update = { textureView ->
-                        if (textureView.isAvailable) {
-                            exoPlayer.setVideoTextureView(textureView)
-                        }
-                    })
-            }
-        } else {
-            Box(
+        if (!isBackgroundPlayEnabled && isInPipMode) {
+            PipPlayerScreen(
+                mediaController = exoPlayer,
+                videoWidth = videoWidth,
+                videoHeight = videoHeight,
+                isAudioOnly = isAudioOnly,
+                viewModel = viewModel,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onDragStart = { offset ->
-                                val isLeftSide = offset.x < size.width / 2
-                                val isBottomAbove30 = offset.y > (size.height * 0.3f)
-                                val isBottomBelow30 = offset.y < (size.height * 0.7f)
-                                if (isBottomAbove30 && isBottomBelow30) {
-                                    viewModel.hideControls()
-                                    if (isLeftSide) {
-                                        hideVolumeChangeJob?.cancel()
-                                        hideVolumeChangeJob = null
-                                        volumeChangeState =
-                                            volumeChangeState.copy(isDragging = false)
-                                        volumeVerticalDragState = volumeVerticalDragState.copy(
-                                            isDragging = true,
-                                            progress = getCurrentVolume(context)
-                                        )
-                                    } else {
-                                        brightnessVerticalDragState =
-                                            brightnessVerticalDragState.copy(
-                                                isDragging = true,
-                                                progress = getCurrentWindowBrightness(context)
-                                            )
-                                    }
-                                }
-                            },
-                            onDragEnd = {
-                                volumeVerticalDragState = volumeVerticalDragState.copy(
-                                    isDragging = false
-                                )
-                                brightnessVerticalDragState = brightnessVerticalDragState.copy(
-                                    isDragging = false
-                                )
-                            }
-                        ) { change, dragAmount ->
-                            if (dragAmount.absoluteValue < 3f) return@detectVerticalDragGestures
-                            if (volumeVerticalDragState.isDragging) {
-                                change.consume()
-                                val percent = -dragAmount / verticalProgressBarHeightPx
-                                volumeVerticalDragState = volumeVerticalDragState.copy(
-                                    progress = (volumeVerticalDragState.progress + percent)
-                                        .coerceIn(0f, 1f)
-                                )
-                                setSystemVolume(context, volumeVerticalDragState.progress)
-                            }
-                            if (brightnessVerticalDragState.isDragging) {
-                                change.consume()
-                                val percent = -dragAmount / verticalProgressBarHeightPx
-                                brightnessVerticalDragState = brightnessVerticalDragState.copy(
-                                    progress = (brightnessVerticalDragState.progress + percent)
-                                        .coerceIn(0f, 1f)
-                                )
-                                updateBrightness(context, brightnessVerticalDragState.progress)
-                            }
-                        }
-                    }
-                    .pointerInput(isLockedOrientation, isLandscape) {
-                        if (!isLockedOrientation) {
-                            detectTapGestures(onDoubleTap = { offset ->
-                                val isLeftSide = offset.x < size.width / 2
-                                val isRightSide = offset.x >= size.width / 2
-                                if (isLeftSide) {
-                                    if (exoPlayer.currentPosition > 0) {
-                                        doubleTapSeekDirection =
-                                            SEEK_BACKWARD
-                                        viewModel.seekBackward()
-                                    }
-                                } else if (isRightSide) {
-                                    if (exoPlayer.currentPosition < totalDurationMillis) {
-                                        doubleTapSeekDirection =
-                                            SEEK_FORWARD
-                                        viewModel.seekForward()
-                                    }
-                                }
-                            }, onTap = {
-                                if (isControlsVisible) {
-                                    enterFullScreenMode(context.findActivity())
-                                    viewModel.hideControls()
-                                } else {
-                                    showPlayerControls(isLandscape)
-                                }
-                            }, onPress = {
-                                cancelControlsHideJob()
-                            })
-                        }
-                    }) {
-                if (isAudioOnly) {
-                    Icon(
-                        imageVector = Icons.Default.Audiotrack,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(120.dp),
-                        tint = Color.White.copy(0.6f)
-                    )
-                } else {
-                    AndroidView(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .then(
-                                if (videoWidth > 0 && videoHeight > 0) Modifier.aspectRatio(
-                                    videoWidth.toFloat() / videoHeight.toFloat()
-                                ) else Modifier.alpha(0f)
-                            )
-                            .onGloballyPositioned { layoutCoordinates ->
-                                if(videoWidth > 0 && videoHeight > 0){
-                                    val sourceRect =
-                                        layoutCoordinates.boundsInWindow().toAndroidRectF().toRect()
-                                    pipBuilder.setSourceRectHint(sourceRect)
-
-                                    val minRatio = 0.418410f
-                                    val maxRatio = 2.39f
-
-                                    val rawRatio = videoWidth.toFloat() / videoHeight.toFloat()
-                                    val clamped = rawRatio.coerceIn(minRatio, maxRatio)
-
-                                    pipBuilder.setAspectRatio(
-                                        Rational(
-                                            (clamped * 10000).toInt(),
-                                            10000
-                                        )
-                                    )
-                                }
-                            }, factory = {
-                            exoPlayer.setVideoTextureView(textureView)
-                            textureView
-                        }, update = { textureView ->
-                            if (textureView.isAvailable) {
-                                exoPlayer.setVideoTextureView(textureView)
-                            }
-                        })
-
-                    SubTitleView(
-                        onSetView = {
-                            subtitleViewRef.set(this)
-                        },
-                        modifier = Modifier.then(
-                            if (isControlsVisible) Modifier.padding(
-                                bottom = with(
-                                    density
-                                ) {
-                                    subtitlePadding.toDp()
-                                }) else Modifier
-                        )
-                    )
-                }
-            }
-
-            if (isLockedOrientation) {
-                LockedButton(
-                    onClick = {
-                        viewModel.updateLockedOrientation(false)
-                        showPlayerControls(isLandscape)
-                        context.findActivity().requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    }
-                )
-            }
-
-            PlayerTopBar(
-                title = currentPlayingVideoInfo.title,
-                isControlsVisible = isControlsVisible,
-                onPopUp = onPopUp,
-                onSubTitleSettingsClick = {
-                    showSubtitleSettings = true
-                }) {
-                showMorePlayerSettings = true
-            }
-
-            VerticalDragController(
-                verticalProgressBarSize = verticalProgressBarSize,
-                volumeChangeState = volumeChangeState,
-                volumeVerticalDragState = volumeVerticalDragState,
-                brightnessVerticalDragState = brightnessVerticalDragState
             )
 
-            if (isLandscape()) {
-                PlayerControlsLandscape(
-                    isVisible = isControlsVisible,
-                    isPlaying = isPlaying,
-                    isMuted = isMuted,
-                    sliderProgress = sliderProgress,
-                    totalDurationMillis = totalDurationMillis,
-                    currentDurationMillis = currentDurationMillis,
-                    thumbSize = thumbSize,
-                    trackHeight = trackHeight,
-                    orientation = orientation,
-                    onSeekPrevious = viewModel::seekToPrevious,
-                    onSeekNext = viewModel::seekToNext,
-                    onPlayPauseToggle = viewModel::togglePlayPause,
-                    onMuteToggle = viewModel::toggleMute,
-                    onEnterPip = {
-                        viewModel.hideControls()
-                        context.findActivity().enterPictureInPictureMode(pipBuilder.build())
-                    },
-                    onLockOrientation = {
-                        viewModel.hideControls()
-                        viewModel.updateLockedOrientation(true)
-                    },
-                    onRotateOrientation = { newOrientation, config ->
-                        lastOrientation = config
-                        context.findActivity().requestedOrientation = newOrientation
-                    },
-
-                    onSliderChange = {
-                        cancelControlsHideJob()
-                        viewModel.onSliderValueChange(it)
-                        viewModel.onUpdateSliderValueChange(true)
-                    },
-                    onSliderFinished = {
-                        if (isPlaying) {
-                            createControlsHideJob()
-                        }
-                        viewModel.onSliderValueChangeFinished()
-                        viewModel.onUpdateSliderValueChange(false)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp)
-                        .onGloballyPositioned {
-                            subtitlePadding = it.size.height
-                        }
-                )
-            } else {
-                PlayerControlsPortrait(
-                    isVisible = isControlsVisible,
-                    sliderProgress = sliderProgress,
-                    totalDurationMillis = totalDurationMillis,
-                    currentDurationMillis = currentDurationMillis,
-                    isPlaying = isPlaying,
-                    thumbSize = thumbSize,
-                    trackHeight = trackHeight,
-                    onSliderChange = {
-                        cancelControlsHideJob()
-                        viewModel.onSliderValueChange(it)
-                        viewModel.onUpdateSliderValueChange(true)
-                    },
-                    onSliderChangeFinished = {
-                        if (isPlaying) {
-                            createControlsHideJob()
-                        }
-                        viewModel.onSliderValueChangeFinished()
-                        viewModel.onUpdateSliderValueChange(false)
-                    },
-                    onPlayPauseToggle = viewModel::togglePlayPause,
-                    onSeekPrevious = viewModel::seekToPrevious,
-                    onSeekNext = viewModel::seekToNext,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 32.dp)
-                        .onGloballyPositioned {
-                            subtitlePadding = it.size.height
-                        }
-                )
-            }
-
-            TapToSeekController(doubleTapSeekDirection)
-
-            if (showMorePlayerSettings) {
-                PlayerSettingsMenu(
-                    isAudioOnly = isAudioOnly,
-                    playBackSpeeds = playBackSpeeds,
-                    currentPlayBackSpeed = currentPlayPackSpeed,
-                    currentRepeatMode = currentRepeatMode,
-                    audioTracks = currentPlayingVideoInfo.audioTrackInfos,
-                    currentAudioTrack = currentAudioTrack,
-                    onDismiss = { showMorePlayerSettings = false },
-                    onToggleAudioOnly = viewModel::toggleAudioOnly,
-                    onSpeedSelected = viewModel::setCurrentPlayBackSpeed,
-                    onRepeatModeSelected = viewModel::setCurrentPlayListRepeatMode,
-                    onAudioSelected = {
-                        viewModel.switchAudioTrack(it.groupIndex, it.trackIndex)
-                    }
-                )
-            }
-
-            if (showSubtitleSettings) {
-                SubTitleSettingsMenu(
-                    isSubtitleEnabled = isSubtitleEnabled,
-                    subtitleTracks = currentPlayingVideoInfo.subtitleTrackInfos,
-                    currentSubtitleTrack = currentSubtitleTrack,
-                    localSubtitles = localSubtitles,
-                    currentLocalSubtitle = currentLocalSubtitle,
-                    onDismiss = { showSubtitleSettings = false },
-                    onSubtitleSelected = viewModel::switchSubTitleTrack,
-                    onLocalSubtitleSelected = viewModel::updateCurrentLocalSubtitle,
-                    onSubtitleToggle = viewModel::onSubtitleToggle
-                )
-            }
+        } else {
+            LargeVideoPlayerScreen(
+                volumeKeyChannel = volumeKeyChannel,
+                exoPlayer = exoPlayer,
+                videoWidth = videoWidth,
+                videoHeight = videoHeight,
+                onPopUp = onPopUp,
+                viewModel = viewModel,
+                modifier = Modifier
+            )
         }
     }
 }

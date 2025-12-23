@@ -17,20 +17,30 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
         private const val AUDIO_ONLY = "is_audio_only"
         private const val SUBTITLES_ENABLED = "subtitles_enabled"
         private const val PLAYBACK_MODE = "playback_mode"
-
         private const val PLAYBACK_SPEED = "playback_speed"
+
+        private const val BACKGROUND_VIDEO_PLAY_ENABLED = "background_video_play_enabled"
+
     }
 
-    /** Save audio-only mode */
     fun setAudioOnly(enabled: Boolean) {
         prefs.edit {
             putBoolean(AUDIO_ONLY, enabled)
         }
     }
 
-    /** Load audio-only mode */
     fun isAudioOnly(): Boolean {
         return prefs.getBoolean(AUDIO_ONLY, false)
+    }
+
+    fun setBackgroundVideoPlayModeEnabled(enabled: Boolean) {
+        prefs.edit {
+            putBoolean(BACKGROUND_VIDEO_PLAY_ENABLED, enabled)
+        }
+    }
+
+    fun isBackgroundVideoPlayModeEnabled(): Boolean {
+        return prefs.getBoolean(BACKGROUND_VIDEO_PLAY_ENABLED, true)
     }
 
     fun setSubtitlesEnabled(enabled: Boolean) {

@@ -1,2 +1,54 @@
-package com.flix.videos.ui.app.player.service.overlay.managers 
+package com.flix.videos.ui.app.player.service.player.managers
 
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import org.koin.core.annotation.Factory
+import org.koin.core.annotation.InjectedParam
+
+@Factory
+@UnstableApi
+class MediaControllerManager(
+    @InjectedParam private val activity: ComponentActivity
+) : ControllerProvider {
+    private var controller: MediaController? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+
+    override fun getController(
+        sessionToken: SessionToken?,
+        args: Bundle,
+        onReady: ((MediaController, ControllerSource) -> Unit)?
+    ) {
+        if(sessionToken == null) throw IllegalArgumentException("session token can not be empty")
+
+        controller?.let {
+            onReady?.invoke(it, ControllerSource.ACTIVITY)
+            return
+        }
+
+        if (controllerFuture == null) {
+            controllerFuture =
+                MediaController.Builder(
+                    activity,
+                    sessionToken
+                ).buildAsync()
+        }
+
+        controllerFuture!!.addListener({
+            controller = controllerFuture!!.get()
+            onReady?.invoke(controller!!, ControllerSource.ACTIVITY)
+        }, ContextCompat.getMainExecutor(activity))
+    }
+
+    fun releaseMediaController() {
+        controller?.stop()
+        controller?.clearMediaItems()
+        controller?.release()
+        controller = null
+        controllerFuture = null
+    }
+}

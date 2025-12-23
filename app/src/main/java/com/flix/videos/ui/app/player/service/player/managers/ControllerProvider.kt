@@ -1,4 +1,4 @@
-package com.flix.videos.ui.app.player.service
+package com.flix.videos.ui.app.player.service.player.managers
 
 import android.os.Bundle
 import androidx.media3.session.MediaController

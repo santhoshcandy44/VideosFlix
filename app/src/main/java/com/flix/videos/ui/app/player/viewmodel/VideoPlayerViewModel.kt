@@ -1,45 +1,49 @@
 package com.flix.videos.ui.app.player.viewmodel
 
+import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
-import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
+import com.flix.videos.ui.app.player.enterFullScreenMode
+import com.flix.videos.ui.app.player.exitFullScreenMode
 import com.flix.videos.ui.app.player.prefs.AudioTrackPrefs
-import com.flix.videos.ui.app.player.prefs.MediaPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
 import com.flix.videos.ui.app.player.prefs.SubtitlePrefs
+import com.flix.videos.ui.app.player.service.player.managers.ControllerSource
+import com.flix.videos.ui.app.player.service.player.managers.MediaControllerManager
+import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.viewmodel.MediaSourceRepository
 import com.flix.videos.ui.app.viewmodel.SubtitleFileInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
 import java.io.File
-
 
 data class AudioTrackInfo(
     val groupIndex: Int,
@@ -65,7 +69,10 @@ data class VideoParams(
 class VideoPlayerViewModel
     (
     val applicationContext: Context,
-    @InjectedParam videoParams: VideoParams,
+    @InjectedParam val isWindowMini: Boolean,
+    @InjectedParam val videoParams: VideoParams,
+    @InjectedParam val mediaControllerManager: MediaControllerManager?,
+    @InjectedParam val serviceMediaControllerManager: ServiceMediaControllerManager?,
     val mediaSourceRepository: MediaSourceRepository,
     val plaBackPosPrefs: PlaybackPosPrefs,
     val subtitlePrefs: SubtitlePrefs,
@@ -76,10 +83,8 @@ class VideoPlayerViewModel
     private val _isLoading = MutableStateFlow(true)
     val isLoading = _isLoading.asStateFlow()
 
-    val exoPlayer = ExoPlayer.Builder(applicationContext.applicationContext).build()
-        .apply {
-            setHandleAudioBecomingNoisy(true)
-        }
+    private val _controllerState = MutableStateFlow<MediaController?>(null)
+    val controllerState = _controllerState.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -107,6 +112,10 @@ class VideoPlayerViewModel
 
     private val _isAudioOnly = MutableStateFlow(playbackSettingsPrefs.isAudioOnly())
     val isAudioOnly = _isAudioOnly.asStateFlow()
+
+    private val _isBackgroundVideoPlayModeEnabled =
+        MutableStateFlow(playbackSettingsPrefs.isBackgroundVideoPlayModeEnabled())
+    val isBackgroundVideoPlayModeEnabled = _isBackgroundVideoPlayModeEnabled.asStateFlow()
 
     val playBackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -142,6 +151,34 @@ class VideoPlayerViewModel
     private val _currentSubtitleTrack = MutableStateFlow<SubtitleTrackInfo?>(null)
     val currentSubtitleTrack = _currentSubtitleTrack.asStateFlow()
 
+    //Player Controls Hide Job
+    private var playerControlsHideJob: Job? = null
+
+    fun showPlayerControls(
+        activity: Activity,
+        isLandscape: Boolean,
+        scheduleControlsHideJob: Boolean = true
+    ) {
+        showControls()
+        if (!isLandscape)
+            exitFullScreenMode(activity)
+        if (isLandscape && scheduleControlsHideJob)
+            createControlsHideJob(activity)
+    }
+
+    fun createControlsHideJob(activity: Activity, timeMillis: Long = 5000) {
+        playerControlsHideJob = viewModelScope.launch {
+            delay(timeMillis)
+            enterFullScreenMode(activity)
+            hideControls()
+        }
+    }
+
+    fun cancelControlsHideJob() {
+        playerControlsHideJob?.cancel()
+        playerControlsHideJob = null
+    }
+
     private val defaultMediaSourceFactory =
         DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
 
@@ -149,11 +186,9 @@ class VideoPlayerViewModel
         _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
     }
 
-    private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var player: ExoPlayer? = null
 
-    val mediaSession = MediaSession.Builder(applicationContext, exoPlayer)
-        .setId("headphone_session")
-        .build()
+    private var mediaSession: MediaSession? = null
 
     init {
         viewModelScope.launch {
@@ -171,16 +206,61 @@ class VideoPlayerViewModel
                 }
             requiredVideos = if (videoParams.group != null) groupedVideos[videoParams.group]
                 ?: emptyList() else allVideos
+            val controllerManager =
+                if (isWindowMini) serviceMediaControllerManager
+                else mediaControllerManager
 
-            val playItemIndex = findVideoIndexById(requiredVideos, videoParams.id)
-            _currentPlayingVideoInfo.value = requiredVideos.getOrElse(
-                playItemIndex
-            ) { VideoInfo.EMPTY }
-            val mediaSources = requiredVideos.map { videoInfo ->
-                defaultMediaSourceFactory.createMediaSource(
+            val sessionToken = if (isWindowMini) null
+            else {
+                player = ExoPlayer.Builder(applicationContext).build().apply {
+                    setHandleAudioBecomingNoisy(true)
+                    setPriority(C.PRIORITY_PLAYBACK)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(C.USAGE_MEDIA)
+                            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                            .build(),
+                        true
+                    )
+                }
+
+                mediaSession = MediaSession.Builder(applicationContext, player!!)
+                    .setId("local_media_session")
+                    .build()
+
+                mediaSession!!.token
+            }
+
+            controllerManager?.getController(sessionToken, Bundle.EMPTY) { mediaController, source ->
+                _controllerState.value = mediaController
+                _currentLocalSubtitle.value =
+                    subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)
+                        ?.let { mediaSourceRepository.getSubtitleInfoFromUri(it) }
+
+                applyRepeatMode(_currentRepeatMode.value)
+                if (_isSubtitleEnabled.value)
+                    enableSubtitles()
+                else
+                    disableSubtitles()
+                mediaController.setPlaybackSpeed(_currentPlayPackSpeed.value)
+
+                val playItemIndex = findVideoIndexById(
+                    requiredVideos,
+                    videoParams.id
+                ).let { if (it == -1) 0 else it }
+                _currentPlayingVideoInfo.value = requiredVideos.getOrElse(
+                    playItemIndex
+                ) { VideoInfo.EMPTY }
+
+                val mediaItems = requiredVideos.map { videoInfo ->
                     MediaItem.Builder()
                         .setUri(videoInfo.uri)
-                        .setTag(videoInfo)
+                        .setMediaId(videoInfo.id.toString())
+                        .setMediaMetadata(
+                            MediaMetadata.Builder()
+                                .setTitle(videoInfo.title)
+                                .build()
+                        )
                         .apply {
                             subtitlePrefs.getSavedSubtitleUri(videoInfo.uri)?.let {
                                 val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(it)
@@ -193,33 +273,21 @@ class VideoPlayerViewModel
                             }
                         }
                         .build()
-                )
-            }
-            exoPlayer.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(), true
-            )
-            exoPlayer.setMediaSources(
-                mediaSources,
-                playItemIndex,
-                plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
-            )
-            _currentLocalSubtitle.value =
-                subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)?.let {
-                    mediaSourceRepository.getSubtitleInfoFromUri(it)
                 }
-            applyRepeatMode(_currentRepeatMode.value)
-            if (_isSubtitleEnabled.value)
-                enableSubtitles()
-            else
-                disableSubtitles()
-            exoPlayer.setPlaybackSpeed(_currentPlayPackSpeed.value)
-            exoPlayer.prepare()
-            exoPlayer.play()
 
-            _isLoading.value = false
+                mediaController.setMediaItems(
+                    mediaItems,
+                    playItemIndex,
+                    plaBackPosPrefs.getPosition(_currentPlayingVideoInfo.value.uri)
+                )
+
+                if (source == ControllerSource.ACTIVITY) {
+                    mediaController.prepare()
+                    mediaController.play()
+                }
+
+                _isLoading.value = false
+            }
         }
 
         viewModelScope.launch {
@@ -234,14 +302,19 @@ class VideoPlayerViewModel
 
     fun findVideoIndexById(videos: List<VideoInfo>, videoId: Long): Int {
         return videos.indexOfFirst { it.id == videoId }
-            .takeIf { it != -1 } ?: 0
+            .takeIf { it != -1 } ?: -1
+    }
+
+    fun getCurrentPlayingVideoInfo(mediaId: Long): VideoInfo? {
+        val playItemIndex = findVideoIndexById(requiredVideos, mediaId)
+        return requiredVideos.getOrNull(playItemIndex)
     }
 
     fun setCurrentPlayingVideoInfo(videoInfo: VideoInfo) {
         _currentPlayingVideoInfo.value = videoInfo
     }
 
-    fun showControls() {
+    private fun showControls() {
         _isControlsVisible.value = true
     }
 
@@ -262,10 +335,12 @@ class VideoPlayerViewModel
         val updatedCurrentDurationMillis =
             (_sliderProgress.value * _currentPlayingVideoInfo.value.duration).toLong()
         onUpdateCurrentDurationMillis(updatedCurrentDurationMillis)
-        exoPlayer.seekTo(updatedCurrentDurationMillis)
-        if (exoPlayer.playbackState == Player.STATE_IDLE) {
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
+        _controllerState.value?.let { controller ->
+            controller.seekTo(updatedCurrentDurationMillis)
+            if (controller.playbackState == Player.STATE_IDLE) {
+                controller.prepare()
+                controller.playWhenReady = true
+            }
         }
     }
 
@@ -278,27 +353,29 @@ class VideoPlayerViewModel
     }
 
     fun togglePlayPause() {
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
-        } else {
-            if (exoPlayer.playbackState == Player.STATE_IDLE) {
-                exoPlayer.seekTo(0)
-                exoPlayer.prepare()
-                exoPlayer.playWhenReady = true
+        _controllerState.value?.let { controller ->
+            if (controller.isPlaying) {
+                controller.pause()
             } else {
-                exoPlayer.play()
+                if (controller.playbackState == Player.STATE_IDLE) {
+                    controller.seekTo(0)
+                    controller.prepare()
+                    controller.playWhenReady = true
+                } else {
+                    controller.play()
+                }
             }
         }
     }
 
     fun toggleMute() {
         _isMuted.value = !_isMuted.value
-        exoPlayer.volume = if (_isMuted.value) 0f else 1f
+        _controllerState.value?.volume = if (_isMuted.value) 0f else 1f
     }
 
     fun setMuted(muted: Boolean) {
         _isMuted.value = muted
-        exoPlayer.volume = if (muted) 0f else 1f
+        _controllerState.value?.volume = if (muted) 0f else 1f
     }
 
     fun updateLockedOrientation(isLocked: Boolean) {
@@ -310,10 +387,15 @@ class VideoPlayerViewModel
         playbackSettingsPrefs.setAudioOnly(_isAudioOnly.value)
     }
 
+    fun toggleBackgroundVideoPlayModeEnabled(isChecked: Boolean) {
+        _isBackgroundVideoPlayModeEnabled.value = isChecked
+        playbackSettingsPrefs.setBackgroundVideoPlayModeEnabled(isChecked)
+    }
+
     fun setCurrentPlayBackSpeed(speed: Float) {
         _currentPlayPackSpeed.value = speed
         playbackSettingsPrefs.setPlaybackSpeed(speed)
-        exoPlayer.setPlaybackSpeed(speed)
+        _controllerState.value?.setPlaybackSpeed(speed)
     }
 
     fun setCurrentPlayListRepeatMode(mode: ExoPlayerRepeatMode) {
@@ -323,25 +405,27 @@ class VideoPlayerViewModel
     }
 
     private fun applyRepeatMode(mode: ExoPlayerRepeatMode) {
-        return when (mode) {
-            ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
-                exoPlayer.repeatMode = Player.REPEAT_MODE_OFF
-                exoPlayer.shuffleModeEnabled = false
-            }
+        _controllerState.value?.let { controller ->
+            when (mode) {
+                ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
+                    controller.repeatMode = Player.REPEAT_MODE_OFF
+                    controller.shuffleModeEnabled = false
+                }
 
-            ExoPlayerRepeatMode.REPEAT_MODE_ONE -> {
-                exoPlayer.repeatMode = Player.REPEAT_MODE_ONE
-                exoPlayer.shuffleModeEnabled = false
-            }
+                ExoPlayerRepeatMode.REPEAT_MODE_ONE -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ONE
+                    controller.shuffleModeEnabled = false
+                }
 
-            ExoPlayerRepeatMode.REPEAT_MODE_ALL -> {
-                exoPlayer.repeatMode = Player.REPEAT_MODE_ALL
-                exoPlayer.shuffleModeEnabled = false
-            }
+                ExoPlayerRepeatMode.REPEAT_MODE_ALL -> {
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                    controller.shuffleModeEnabled = false
+                }
 
-            ExoPlayerRepeatMode.SHUFFLE -> {
-                exoPlayer.shuffleModeEnabled = true
-                exoPlayer.repeatMode = Player.REPEAT_MODE_ALL
+                ExoPlayerRepeatMode.SHUFFLE -> {
+                    controller.shuffleModeEnabled = true
+                    controller.repeatMode = Player.REPEAT_MODE_ALL
+                }
             }
         }
     }
@@ -355,26 +439,28 @@ class VideoPlayerViewModel
     }
 
     private fun getCurrentAudioTrack(): AudioTrackInfo? {
-        val groups = exoPlayer.currentTracks.groups
-        groups.forEachIndexed { groupIndex, group ->
-            if (group.type == C.TRACK_TYPE_AUDIO) {
-                for (trackIndex in 0 until group.length) {
-                    if (group.isTrackSelected(trackIndex)) {
-                        val format = group.mediaTrackGroup.getFormat(trackIndex)
+        _controllerState.value?.let { controller ->
+            val groups = controller.currentTracks.groups
+            groups.forEachIndexed { groupIndex, group ->
+                if (group.type == C.TRACK_TYPE_AUDIO) {
+                    for (trackIndex in 0 until group.length) {
+                        if (group.isTrackSelected(trackIndex)) {
+                            val format = group.mediaTrackGroup.getFormat(trackIndex)
 
-                        val displayLabel =
-                            if (format.language != null && format.label != null) {
-                                "${format.language}_${format.label}"
-                            } else {
-                                "Audio Track ${trackIndex + 1}"
-                            }
+                            val displayLabel =
+                                if (format.language != null && format.label != null) {
+                                    "${format.language}_${format.label}"
+                                } else {
+                                    "Audio Track ${trackIndex + 1}"
+                                }
 
-                        return AudioTrackInfo(
-                            groupIndex = groupIndex,
-                            trackIndex = trackIndex,
-                            language = format.language,
-                            label = displayLabel
-                        )
+                            return AudioTrackInfo(
+                                groupIndex = groupIndex,
+                                trackIndex = trackIndex,
+                                language = format.language,
+                                label = displayLabel
+                            )
+                        }
                     }
                 }
             }
@@ -383,28 +469,31 @@ class VideoPlayerViewModel
     }
 
     private fun getCurrentSubtitleTrack(): SubtitleTrackInfo? {
-        val groups = exoPlayer.currentTracks.groups
-        groups.forEachIndexed { groupIndex, group ->
-            if (group.type == C.TRACK_TYPE_TEXT) {
-                for (trackIndex in 0 until group.length) {
-                    if (group.isTrackSelected(trackIndex)) {
-                        val format = group.mediaTrackGroup.getFormat(trackIndex)
-                        val displayLabel =
-                            if (format.language != null && format.label != null) {
-                                "${format.language}_${format.label}"
-                            } else {
-                                "Subtitle ${trackIndex + 1}"
-                            }
-                        return SubtitleTrackInfo(
-                            groupIndex = groupIndex,
-                            trackIndex = trackIndex,
-                            language = format.language,
-                            label = displayLabel
-                        )
+        _controllerState.value?.let { controller ->
+            val groups = controller.currentTracks.groups
+            groups.forEachIndexed { groupIndex, group ->
+                if (group.type == C.TRACK_TYPE_TEXT) {
+                    for (trackIndex in 0 until group.length) {
+                        if (group.isTrackSelected(trackIndex)) {
+                            val format = group.mediaTrackGroup.getFormat(trackIndex)
+                            val displayLabel =
+                                if (format.language != null && format.label != null) {
+                                    "${format.language}_${format.label}"
+                                } else {
+                                    "Subtitle ${trackIndex + 1}"
+                                }
+                            return SubtitleTrackInfo(
+                                groupIndex = groupIndex,
+                                trackIndex = trackIndex,
+                                language = format.language,
+                                label = displayLabel
+                            )
+                        }
                     }
                 }
             }
         }
+
         return null
     }
 
@@ -412,46 +501,58 @@ class VideoPlayerViewModel
         groupIndex: Int,
         trackIndex: Int
     ): Boolean {
-        val group = exoPlayer.currentTracks.groups.getOrNull(groupIndex) ?: return false
+        _controllerState.value?.let { controller ->
+            val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
 
-        val override = TrackSelectionOverride(
-            group.mediaTrackGroup,
-            listOf(trackIndex)
-        )
+            val override = TrackSelectionOverride(
+                group.mediaTrackGroup,
+                listOf(trackIndex)
+            )
 
-        val newParams = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-            .setOverrideForType(override)
-            .build()
+            val newParams = controller.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .setOverrideForType(override)
+                .build()
 
-        exoPlayer.trackSelectionParameters = newParams
-        audioTrackPrefs.saveAudioTrack(_currentPlayingVideoInfo.value.uri, groupIndex, trackIndex)
-        return true
+            controller.trackSelectionParameters = newParams
+            audioTrackPrefs.saveAudioTrack(
+                _currentPlayingVideoInfo.value.uri,
+                groupIndex,
+                trackIndex
+            )
+
+            return true
+        }
+        return false
     }
 
     fun switchSubTitleTrack(
         subtitleTrack: SubtitleTrackInfo
     ): Boolean {
-        val groupIndex = subtitleTrack.groupIndex
-        val trackIndex = subtitleTrack.trackIndex
+        _controllerState.value?.let { controller ->
+            val groupIndex = subtitleTrack.groupIndex
+            val trackIndex = subtitleTrack.trackIndex
 
-        val group = exoPlayer.currentTracks.groups.getOrNull(groupIndex) ?: return false
+            val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
 
-        val override = TrackSelectionOverride(
-            group.mediaTrackGroup,
-            listOf(trackIndex)
-        )
+            val override = TrackSelectionOverride(
+                group.mediaTrackGroup,
+                listOf(trackIndex)
+            )
 
-        val newParams = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-            .setOverrideForType(override)
-            .build()
+            val newParams = controller.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setOverrideForType(override)
+                .build()
 
-        exoPlayer.trackSelectionParameters = newParams
-        subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
-        return true
+            controller.trackSelectionParameters = newParams
+            subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
+            return true
+        }
+
+        return false
     }
 
     fun onSubtitleToggle(isChecked: Boolean) {
@@ -464,21 +565,25 @@ class VideoPlayerViewModel
     }
 
     fun enableSubtitles() {
-        val params = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .build()
+        _controllerState.value?.let { controller ->
+            val params = controller.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
 
-        exoPlayer.trackSelectionParameters = params
+            controller.trackSelectionParameters = params
+        }
     }
 
     fun disableSubtitles() {
-        val params = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            .build()
+        _controllerState.value?.let { controller ->
+            val params = controller.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
 
-        exoPlayer.trackSelectionParameters = params
+            controller.trackSelectionParameters = params
+        }
     }
 
     fun updateCurrentLocalSubtitle(subtitleFileInfo: SubtitleFileInfo) {
@@ -488,90 +593,110 @@ class VideoPlayerViewModel
     }
 
     private fun applyLocalSubtitle(uri: Uri) {
-        val currentIndex = exoPlayer.currentMediaItemIndex
-        val position = exoPlayer.currentPosition
-        val playWhenReady = exoPlayer.playWhenReady
+        _controllerState.value?.let { controller ->
+            val currentIndex = controller.currentMediaItemIndex
+            val position = controller.currentPosition
+            val playWhenReady = controller.playWhenReady
 
-        // Create subtitle config
-        val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(uri)
-            .setMimeType(
-                mediaSourceRepository.detectSubtitleMimeType(uri)
-            )  // auto-detect (SRT/ASS/VTT)
-            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-            .setRoleFlags(C.ROLE_FLAG_CAPTION)
-            .setLanguage("und")
-            .build()
-
-        val newSources = requiredVideos.map { video ->
-            val item = MediaItem.Builder()
-                .setUri(video.uri)
-                .setTag(video)
-                .apply {
-                    if (video.id == _currentPlayingVideoInfo.value.id) {
-                        setSubtitleConfigurations(listOf(subtitleConfig))
-                    }
-                }
+            // Create subtitle config
+            val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(uri)
+                .setMimeType(
+                    mediaSourceRepository.detectSubtitleMimeType(uri)
+                )  // auto-detect (SRT/ASS/VTT)
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setRoleFlags(C.ROLE_FLAG_CAPTION)
+                .setLanguage("und")
                 .build()
-            defaultMediaSourceFactory.createMediaSource(item)
+
+            val newMediaItems = requiredVideos.map { video ->
+                MediaItem.Builder()
+                    .setUri(video.uri)
+                    .setTag(video)
+                    .apply {
+                        if (video.id == _currentPlayingVideoInfo.value.id) {
+                            setSubtitleConfigurations(listOf(subtitleConfig))
+                        }
+                    }
+                    .build()
+            }
+
+            controller.setMediaItems(
+                newMediaItems,
+                currentIndex,
+                position
+            )
+            controller.prepare()
+            controller.playWhenReady = playWhenReady
+
+            val params = controller.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+
+            controller.trackSelectionParameters = params
         }
-
-        exoPlayer.setMediaSources(
-            newSources,
-            currentIndex,
-            position
-        )
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = playWhenReady
-
-        val params = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .build()
-
-        exoPlayer.trackSelectionParameters = params
     }
 
     fun seekForward(millis: Long = 10_000) {
-        val newPos =
-            (exoPlayer.currentPosition + millis).coerceAtMost(_currentPlayingVideoInfo.value.duration)
-        exoPlayer.seekTo(newPos)
+        _controllerState.value?.let { controller ->
+            val newPos =
+                (controller.currentPosition + millis).coerceAtMost(_currentPlayingVideoInfo.value.duration)
+            controller.seekTo(newPos)
+        }
     }
 
     fun seekBackward(millis: Long = 10_000) {
-        val newPos = (exoPlayer.currentPosition - millis).coerceAtLeast(0)
-        exoPlayer.seekTo(newPos)
+        _controllerState.value?.let { controller ->
+            val newPos = (controller.currentPosition - millis).coerceAtLeast(0)
+            controller.seekTo(newPos)
+        }
     }
 
     fun seekToNext() {
-        plaBackPosPrefs.savePosition(_currentPlayingVideoInfo.value.uri, exoPlayer.currentPosition)
-        exoPlayer.seekToNextMediaItem()
+        _controllerState.value?.let { controller ->
+            plaBackPosPrefs.savePosition(
+                _currentPlayingVideoInfo.value.uri,
+                controller.currentPosition
+            )
+            controller.seekToNextMediaItem()
+        }
     }
 
     fun seekToPrevious() {
-        plaBackPosPrefs.savePosition(_currentPlayingVideoInfo.value.uri, exoPlayer.currentPosition)
-        exoPlayer.seekToPreviousMediaItem()
+        _controllerState.value?.let { controller ->
+            plaBackPosPrefs.savePosition(
+                _currentPlayingVideoInfo.value.uri,
+                controller.currentPosition
+            )
+            controller.seekToPreviousMediaItem()
+        }
     }
 
     fun onFastSeekFinished() {
-        val sliderValue =
-            (exoPlayer.currentPosition / _currentPlayingVideoInfo.value.duration.toFloat())
-                .takeIf { _currentPlayingVideoInfo.value.duration > 0 }
-                ?.coerceIn(0f, 1f)
-                ?: 0f
-        onSliderValueChange(sliderValue)
+        _controllerState.value?.let { controller ->
+            val sliderValue =
+                (controller.currentPosition / _currentPlayingVideoInfo.value.duration.toFloat())
+                    .takeIf { _currentPlayingVideoInfo.value.duration > 0 }
+                    ?.coerceIn(0f, 1f)
+                    ?: 0f
+            onSliderValueChange(sliderValue)
+        }
     }
 
     fun startUpdatingProgress() {
         if (progressJob?.isActive == true) return
-        progressJob = viewModelScope.launch {
-            while (isActive) {
-                if (!isSliderValueChange) {
-                    val pos = exoPlayer.currentPosition
-                    _currentDurationMillis.value = pos
-                    _sliderProgress.value = pos / _currentPlayingVideoInfo.value.duration.toFloat()
+        _controllerState.value?.let { controller ->
+            progressJob = viewModelScope.launch {
+                while (isActive) {
+                    if (!isSliderValueChange) {
+                        val pos = controller.currentPosition
+                        _currentDurationMillis.value = pos
+                        _sliderProgress.value =
+                            pos / _currentPlayingVideoInfo.value.duration.toFloat()
+                    }
+                    delay(33)
                 }
-                delay(33)
             }
         }
     }
@@ -582,9 +707,11 @@ class VideoPlayerViewModel
     }
 
     fun saveMediaIemCurrentPosition() {
-        val configuration = exoPlayer.currentMediaItem?.localConfiguration
-        configuration?.let {
-            plaBackPosPrefs.savePosition(it.uri, exoPlayer.currentPosition)
+        _controllerState.value?.let { controller ->
+            val configuration = controller.currentMediaItem?.localConfiguration
+            configuration?.let {
+                plaBackPosPrefs.savePosition(it.uri, controller.currentPosition)
+            }
         }
     }
 
@@ -600,28 +727,17 @@ class VideoPlayerViewModel
         return audioTrackPrefs.getSavedAudioTrack(uri)
     }
 
-    fun onAudioSessionId(audioSessionId: Int) {
-        if (audioSessionId <= 0) return
-        loudnessEnhancer?.release()
-        loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
-            enabled = true
-        }
-    }
-
-    fun setGainMillibels(mb: Int) {
-        loudnessEnhancer?.setTargetGain(mb.coerceIn(0, 1500))
-    }
-
-    fun releaseLoudnessEnhancer() {
-        loudnessEnhancer?.release()
-        loudnessEnhancer = null
+    fun releaseMediaController() {
+        mediaControllerManager?.releaseMediaController()
+        mediaSession?.release()
+        mediaSession = null
+        player?.release()
+        player = null
     }
 
     override fun onCleared() {
-        super.onCleared()
-        releaseLoudnessEnhancer()
-        mediaSession.release()
-        exoPlayer.release()
+        releaseMediaController()
         applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
+        super.onCleared()
     }
 }

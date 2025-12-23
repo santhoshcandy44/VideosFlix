@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature android:name="android.software.picture_in_picture" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -35,10 +41,20 @@
             android:name=".ui.app.player.PlayerActivity"
             android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize"
             android:exported="true"
-            android:theme="@style/Theme.PlayerActivity.Starting"
-            android:supportsPictureInPicture="true"
-            android:resizeableActivity="true"
             android:launchMode="singleTask"
-            />
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.PlayerActivity" />
+
+        <service
+            android:name=".ui.app.player.service.player.PipPlayerService"
+            android:configChanges="orientation|screenSize|smallestScreenSize"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

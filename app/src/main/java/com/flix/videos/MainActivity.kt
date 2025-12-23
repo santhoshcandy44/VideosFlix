@@ -13,6 +13,7 @@ import com.flix.videos.ui.theme.AppTheme
 import com.flix.videos.ui.utils.SafeDrawing
 
 class MainActivity : ComponentActivity() {
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,12 +27,13 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 }
 
 @Preview
 @Composable
 private fun preView() {
-    AppTheme{
+    AppTheme {
 
     }
 }

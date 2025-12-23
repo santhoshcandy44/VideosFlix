@@ -1,10 +1,9 @@
-package com.flix.videos.ui.app.player.service.overlay
+package com.flix.videos.ui.app.player.service.player.utils
 
 import android.content.Context
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.core.graphics.Insets
-import com.flix.videos.WindowLayoutState
 
 fun getOverlayInsetsAndBounds(
     context: Context

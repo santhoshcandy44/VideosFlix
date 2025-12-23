@@ -1,4 +1,4 @@
-package com.flix.videos.ui.app.player.service
+package com.flix.videos.ui.app.player.service.player.managers
 
 import android.content.ComponentName
 import android.content.Context
@@ -6,7 +6,7 @@ import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.flix.videos.ui.app.player.service.overlay.PipPlayerService
+import com.flix.videos.ui.app.player.service.player.PipPlayerService
 import com.google.common.util.concurrent.ListenableFuture
 import org.koin.core.annotation.Single
 

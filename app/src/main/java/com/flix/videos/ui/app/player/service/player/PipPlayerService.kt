@@ -1,4 +1,4 @@
-package com.flix.videos.ui.app.player.service.overlay
+package com.flix.videos.ui.app.player.service.player
 
 
 import android.annotation.SuppressLint
@@ -19,9 +19,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.flix.videos.WindowLayoutState
+import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
 import com.flix.videos.ui.app.player.VideoPlayerScreen
 import com.flix.videos.ui.app.player.common.dpToPx
+import com.flix.videos.ui.app.player.service.player.utils.calculateMiniWindowSize
+import com.flix.videos.ui.app.player.service.player.utils.getOverlayInsetsAndBounds
 import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,8 +48,8 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
         isRunning = true
         super.onCreate()
         lifecycleScope.launch {
-            videoId.collectLatest { videoId ->
-                if (videoId != null) {
+            videoParams.collectLatest { videoParams ->
+                if (videoParams != null) {
                     layoutParams = WindowManager.LayoutParams().apply {
                         width = WindowManager.LayoutParams.WRAP_CONTENT
                         height = WindowManager.LayoutParams.WRAP_CONTENT
@@ -72,7 +74,7 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
                         setViewTreeViewModelStoreOwner(this@PipPlayerService)
                         setViewTreeSavedStateRegistryOwner(this@PipPlayerService)
                         setContent {
-                            Content(videoId)
+                            Content(videoParams)
                         }
                     }
 
@@ -101,16 +103,13 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
     }
 
     @Composable
-    override fun Content(videoId: Long) {
+    override fun Content(videoParams: VideoParams) {
         val windowLayoutState by windowLayoutState.collectAsState()
         val viewModel = koinViewModel<VideoPlayerViewModel>(
             parameters = {
                 parametersOf(
                     true,
-                    VideoParams(
-                        group = null,
-                        id = videoId
-                    ),
+                    videoParams,
                     null,
                     serviceMediaControllerManager
                 )

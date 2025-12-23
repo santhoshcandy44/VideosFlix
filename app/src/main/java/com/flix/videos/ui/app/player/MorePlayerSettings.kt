@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -21,6 +22,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,10 +36,44 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import com.flix.videos.ui.app.player.viewmodel.AudioTrackInfo
 import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
+
+@Composable
+fun BackgroundPipSettings(
+    isBackgroundPipPlayModeEnabled: Boolean,
+    onBackgroundPipPlayChange: ((Boolean) -> Unit)?,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Background Play Settings",
+            color = Color.LightGray,
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Background Video",
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            Switch(
+                checked = isBackgroundPipPlayModeEnabled,
+                onCheckedChange = onBackgroundPipPlayChange
+            )
+        }
+    }
+}
 
 @Composable
 fun AdditionalSettings(
@@ -292,14 +328,14 @@ fun AudioTrackSettings(
                             currentTrack.trackIndex == track.trackIndex
                     DropdownMenuItem(
                         trailingIcon = {
-                            if(isSelected){
+                            if (isSelected) {
                                 Icon(Icons.Default.Check, contentDescription = null)
                             }
                         },
                         text = {
                             Text(
                                 text = track.label ?: "Unknown",
-                                color =  Color.White,
+                                color = Color.White,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         },

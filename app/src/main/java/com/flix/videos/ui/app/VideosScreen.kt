@@ -37,8 +37,11 @@ import androidx.compose.ui.unit.dp
 import com.flix.videos.R
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.PlayerActivity
+import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
+import com.flix.videos.ui.app.player.service.player.PipPlayerService
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.app.viewmodel.ViewMode
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,18 +55,27 @@ fun VideosScreen(
 
     val context = LocalContext.current
 
+    val serviceMediaControllerManager: ServiceMediaControllerManager =
+        koinInject<ServiceMediaControllerManager>()
+
     val startPlayerActivity: (VideoInfo) -> Unit = { videoInfo ->
         viewModel.makeNewlyAddedMediaIsSeen(videoInfo.id)
-        context.startActivity(
-            Intent(context, PlayerActivity::class.java)
-                .apply {
-                    data = videoInfo.uri
-                    putExtra("video_id", videoInfo.id)
-                    putExtra("title", videoInfo.title)
-                    putExtra("video_width", videoInfo.width)
-                    putExtra("video_height", videoInfo.height)
-                    putExtra("total_duration", videoInfo.duration)
-                })
+        val launchPlayerActivity: () -> Unit = {
+            context.startActivity(
+                Intent(context, PlayerActivity::class.java)
+                    .apply {
+                        action = "ACTION_NEW_ACTIVITY"
+                        data = videoInfo.uri
+                        putExtra("video_id", videoInfo.id)
+                    })
+        }
+
+        if (PipPlayerService
+                .isRunning
+        ) {
+            serviceMediaControllerManager.releaseMediaController()
+        }
+        launchPlayerActivity()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -77,7 +89,7 @@ fun VideosScreen(
                     painterResource(R.drawable.ic_nav), contentDescription = null,
                     modifier = Modifier.size(24.dp)
                 )
-                Text("Videos", style = MaterialTheme.typography.titleMedium)
+                Text("Videos Flix", style = MaterialTheme.typography.titleMedium)
             }
         }, actions = {
             ViewModeSelector(
@@ -117,9 +129,8 @@ fun VideosScreen(
     }
 }
 
-
 @Composable
-fun ViewModeSelector(
+private fun ViewModeSelector(
     currentMode: ViewMode,
     onModeChange: (ViewMode) -> Unit
 ) {

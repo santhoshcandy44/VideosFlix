@@ -27,3 +27,15 @@ fun rememberIsInPipMode(): Boolean {
     }
     return pipMode
 }
+
+@Composable
+fun observerPipModeChange(listener:(PictureInPictureModeChangedInfo)-> Unit){
+    val activity = LocalContext.current.findActivity() as ComponentActivity
+    DisposableEffect(activity) {
+        val observer = Consumer<PictureInPictureModeChangedInfo>(listener)
+        activity.addOnPictureInPictureModeChangedListener(
+            observer
+        )
+        onDispose { activity.removeOnPictureInPictureModeChangedListener(observer) }
+    }
+}

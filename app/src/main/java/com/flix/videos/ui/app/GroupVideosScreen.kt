@@ -1,6 +1,5 @@
 package com.flix.videos.ui.app
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,12 +21,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.flix.videos.ui.app.player.ACTION_BROADCAST_CONTROL
-import com.flix.videos.ui.app.player.EXTRA_CONTROL_TYPE
-import com.flix.videos.ui.app.player.PlayerActivity
+import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,12 +32,12 @@ fun GroupVideosScreen(
     group: String,
     groupName: String,
     viewModel: ReadMediaVideosViewModel,
+    onItemClick: (VideoInfo)-> Unit,
     onPopUp: () -> Unit
 ) {
     val groupedVideos by viewModel.groupedVideos.collectAsState()
     val videInfos = groupedVideos[group] ?: emptyList()
 
-    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -68,20 +64,7 @@ fun GroupVideosScreen(
         VideosList(
             videInfos = videInfos,
             viewModel = viewModel,
-            onItemClick = { videoInfo ->
-                viewModel.makeNewlyAddedMediaIsSeen(videoInfo.id)
-                context.startActivity(
-                    Intent(context, PlayerActivity::class.java)
-                        .apply {
-                            data = videoInfo.uri
-                            putExtra("group", group)
-                            putExtra("video_id", videoInfo.id)
-                            putExtra("title", videoInfo.title)
-                            putExtra("video_width", videoInfo.width)
-                            putExtra("video_height", videoInfo.height)
-                            putExtra("total_duration", videoInfo.duration)
-                        })
-            },
+            onItemClick = onItemClick,
             modifier = Modifier.weight(1f)
         )
     }

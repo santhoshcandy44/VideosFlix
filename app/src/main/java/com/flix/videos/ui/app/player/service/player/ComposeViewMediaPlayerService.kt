@@ -1,4 +1,4 @@
-package com.flix.videos.ui.app.player.service.overlay
+package com.flix.videos.ui.app.player.service.player
 
 import android.content.Intent
 import android.os.IBinder
@@ -11,7 +11,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import com.flix.videos.ui.app.player.service.MediaPlayerService
+import com.flix.videos.ui.app.player.viewmodel.VideoParams
 
 abstract class ComposeViewMediaPlayerService : MediaPlayerService(), LifecycleOwner, ViewModelStoreOwner,
     SavedStateRegistryOwner {
@@ -43,11 +43,6 @@ abstract class ComposeViewMediaPlayerService : MediaPlayerService(), LifecycleOw
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        when (intent?.action) {
-            "ACTION_OVERLAY_DATA" -> {
-                videoId.value = intent.getLongExtra("video_id", -1)
-            }
-        }
         return START_STICKY
     }
 
@@ -59,7 +54,7 @@ abstract class ComposeViewMediaPlayerService : MediaPlayerService(), LifecycleOw
     override val lifecycle: Lifecycle
         get() = dispatcher.lifecycle
             @Composable
-    abstract fun Content(videoId: Long)
+    abstract fun Content(videoParams: VideoParams)
 
     override fun onDestroy() {
         dispatcher.onServicePreSuperOnDestroy()

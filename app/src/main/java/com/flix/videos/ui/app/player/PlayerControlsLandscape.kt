@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.ScreenRotation
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.flix.videos.R
+import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 
@@ -62,6 +64,7 @@ fun PlayerControlsLandscape(
     onPlayPauseToggle: () -> Unit,
     onMuteToggle: () -> Unit,
     onEnterPip: () -> Unit,
+    onEnterBackgroundAudioPlayMode: () -> Unit,
     onLockOrientation: () -> Unit,
     onRotateOrientation: (newOrientation: Int, configOrientation: Int) -> Unit,
     onSliderChange: (Float) -> Unit,
@@ -102,6 +105,16 @@ fun PlayerControlsLandscape(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.PictureInPictureAlt,
+                            contentDescription = "Enter PiP mode"
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onEnterBackgroundAudioPlayMode,
+                        interactionSource = remember { NoIndicationInteractionSource() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Audiotrack,
                             contentDescription = "Enter PiP mode"
                         )
                     }

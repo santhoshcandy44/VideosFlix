@@ -283,4 +283,9 @@ class MediaSourceRepository(
 
         return null
     }
+
+    fun findVideoIndexById(videos: List<VideoInfo>, videoId: Long): Int {
+        return videos.indexOfFirst { it.id == videoId }
+            .takeIf { it != -1 } ?: -1
+    }
 }

@@ -20,15 +20,14 @@ fun rememberDeviceOrientationFlow(): StateFlow<Int> {
             override fun onOrientationChanged(orientation: Int) {
                 if (orientation == ORIENTATION_UNKNOWN) return
 
-                val newOrientation = when {
-                    orientation in 60..120 || orientation in 240..300 ->
+                val newOrientation = when (orientation) {
+                    in 60..120, in 240..300 ->
                         Configuration.ORIENTATION_LANDSCAPE
 
-                    orientation in 300..360 || orientation in 0..30 || orientation in 150..210 ->
+                    in 300..360, in 0..30, in 150..210 ->
                         Configuration.ORIENTATION_PORTRAIT
 
-                    else ->
-                        Configuration.ORIENTATION_UNDEFINED
+                    else -> Configuration.ORIENTATION_UNDEFINED
                 }
 
                 if (orientationFlow.value != newOrientation) {
