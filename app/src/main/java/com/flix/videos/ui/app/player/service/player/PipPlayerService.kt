@@ -81,22 +81,23 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
         layoutParams.x = maxX
         layoutParams.y = maxY
         disableLayoutMovements(layoutParams)
+        overlayView = ComposeView(this@PipPlayerService).apply {
+            setViewTreeLifecycleOwner(this@PipPlayerService)
+            setViewTreeViewModelStoreOwner(this@PipPlayerService)
+            setViewTreeSavedStateRegistryOwner(this@PipPlayerService)
+        }
 
         lifecycleScope.launch {
             videoParams
                 .filterNotNull()
                 .collectLatest { videoParams ->
-                    overlayView = ComposeView(this@PipPlayerService).apply {
-                        setViewTreeLifecycleOwner(this@PipPlayerService)
-                        setViewTreeViewModelStoreOwner(this@PipPlayerService)
-                        setViewTreeSavedStateRegistryOwner(this@PipPlayerService)
+                    overlayView!!.apply {
                         setContent {
                             Content(videoParams)
                         }
                     }
 
                     windowManager!!.addView(overlayView, layoutParams)
-
                     overlayView!!.post {
                         windowManager!!.updateViewLayout(overlayView, layoutParams)
                     }
@@ -280,11 +281,6 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         windowLayoutState.value = getOverlayInsetsAndBounds(this)
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        isRunning = false
-        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {

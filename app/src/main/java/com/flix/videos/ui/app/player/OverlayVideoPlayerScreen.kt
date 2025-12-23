@@ -2,6 +2,7 @@ package com.flix.videos.ui.app.player
 
 import android.graphics.SurfaceTexture
 import android.os.Bundle
+import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
@@ -58,14 +59,12 @@ fun OverlayVideoPlayerScreen(
     isPlaying: Boolean,
     mediaController: MediaController,
     windowLayoutState: WindowLayoutState,
-    modifier : Modifier= Modifier,
+    modifier: Modifier = Modifier,
     attachToDraggable: (View, () -> WindowLayoutState, () -> Unit) -> Unit,
     updateWindowSize: (Int, Int, Boolean) -> Unit,
 ) {
     val serviceMediaControllerManager: ServiceMediaControllerManager =
-        koinInject<ServiceMediaControllerManager> {
-            parametersOf("overlay videos screen")
-        }
+        koinInject<ServiceMediaControllerManager>()
     var videoWidth by remember { mutableIntStateOf(videoInfo.width) }
     var videoHeight by remember { mutableIntStateOf(videoInfo.height) }
     val latestWindowLayoutState by rememberUpdatedState(windowLayoutState)
@@ -197,7 +196,10 @@ fun OverlayVideoPlayerScreen(
             IconButton(
                 onClick = {
                     if (PipPlayerService.isRunning) {
-                        serviceMediaControllerManager.getController(null, Bundle.EMPTY){ mediaController , _ ->
+                        serviceMediaControllerManager.getController(
+                            null,
+                            Bundle.EMPTY
+                        ) { mediaController, _ ->
                             mediaController.sendCustomCommand(
                                 SessionCommand(
                                     CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE,
