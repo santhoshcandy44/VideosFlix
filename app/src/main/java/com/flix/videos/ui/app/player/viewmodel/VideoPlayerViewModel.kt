@@ -154,24 +154,29 @@ class VideoPlayerViewModel
     //Player Controls Hide Job
     private var playerControlsHideJob: Job? = null
 
-    fun showPlayerControls(
-        activity: Activity,
-        isLandscape: Boolean,
-        scheduleControlsHideJob: Boolean = true
-    ) {
-        showControls()
-        if (!isLandscape)
-            exitFullScreenMode(activity)
-        if (isLandscape && scheduleControlsHideJob)
-            createControlsHideJob(activity)
-    }
-
+    /*   fun showPlayerControls(
+           activity: Activity,
+           isLandscape: Boolean,
+           scheduleControlsHideJob: Boolean = true
+       ) {
+           showControls()
+           if (!isLandscape)
+               exitFullScreenMode(activity)
+           if (isLandscape && scheduleControlsHideJob)
+               createControlsHideJob(activity)
+       }
+   */
     fun createControlsHideJob(activity: Activity, timeMillis: Long = 5000) {
         playerControlsHideJob = viewModelScope.launch {
             delay(timeMillis)
             enterFullScreenMode(activity)
             hideControls()
         }
+    }
+
+    fun createControlsHideJobIfNot(activity: Activity, timeMillis: Long = 5000) {
+        if (playerControlsHideJob != null) return
+        createControlsHideJob(activity, timeMillis)
     }
 
     fun cancelControlsHideJob() {
@@ -231,7 +236,10 @@ class VideoPlayerViewModel
                 mediaSession!!.token
             }
 
-            controllerManager?.getController(sessionToken, Bundle.EMPTY) { mediaController, source ->
+            controllerManager?.getController(
+                sessionToken,
+                Bundle.EMPTY
+            ) { mediaController, source ->
                 _controllerState.value = mediaController
                 _currentLocalSubtitle.value =
                     subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)
@@ -314,7 +322,7 @@ class VideoPlayerViewModel
         _currentPlayingVideoInfo.value = videoInfo
     }
 
-    private fun showControls() {
+    fun showControls() {
         _isControlsVisible.value = true
     }
 

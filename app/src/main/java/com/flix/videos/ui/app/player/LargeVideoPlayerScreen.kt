@@ -9,19 +9,34 @@ import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +59,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -68,6 +84,7 @@ import com.flix.videos.ui.app.player.service.CMD_START_AUDIO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.CMD_START_VIDEO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.player.viewmodel.VideoPlayerViewModel
+import com.flix.videos.ui.utils.NoIndicationInteractionSource
 import com.flix.videos.ui.utils.findActivity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -88,7 +105,7 @@ fun LargeVideoPlayerScreen(
     videoWidth: Int,
     videoHeight: Int,
     viewModel: VideoPlayerViewModel,
-    onUpdateSubtitleRef:(SubtitleView)-> Unit,
+    onUpdateSubtitleRef: (SubtitleView) -> Unit,
     onPopUp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -154,9 +171,47 @@ fun LargeVideoPlayerScreen(
         koinInject<ServiceMediaControllerManager>()
     val pipBuilder = viewModel.pipBuilder
 
+    //Permission
+    var showOverlayPermissionRequestDialog by rememberSaveable { mutableStateOf(false) }
+
     LaunchedEffect(isLandscape) {
-        if (isLandscape)
+        if (isLockedOrientation) {
+            if (isLandscape)
+                enterFullScreenMode(context.findActivity())
+            else
+                exitFullScreenMode(context.findActivity())
+        }
+    }
+
+    LifecycleResumeEffect(isLandscape) {
+        if (isLockedOrientation) return@LifecycleResumeEffect onPauseOrDispose {}
+        if (isLandscape) {
             enterFullScreenMode(context.findActivity())
+            viewModel.showControls()
+            viewModel.createControlsHideJob(context.findActivity())
+        } else {
+            exitFullScreenMode(context.findActivity())
+            viewModel.cancelControlsHideJob()
+            viewModel.showControls()
+        }
+        onPauseOrDispose {}
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying && isLandscape) {
+            viewModel.createControlsHideJobIfNot(context.findActivity())
+        } else {
+            viewModel.cancelControlsHideJob()
+            viewModel.showControls()
+        }
+    }
+
+    LaunchedEffect(deviceOrientation) {
+        if (isLockedOrientation) return@LaunchedEffect
+        if (deviceOrientation != lastOrientation) {
+            context.findActivity().requestedOrientation =
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
 
     DisposableEffect(Unit) {
@@ -174,29 +229,6 @@ fun LargeVideoPlayerScreen(
         onDispose {
             exoPlayer.removeListener(listener)
         }
-    }
-
-    LifecycleResumeEffect(Unit) {
-        if (isLockedOrientation) return@LifecycleResumeEffect onPauseOrDispose {}
-        viewModel.showPlayerControls(context.findActivity(), isLandscape)
-        onPauseOrDispose {}
-    }
-
-    LaunchedEffect(deviceOrientation) {
-        if (isLockedOrientation) return@LaunchedEffect
-        if (deviceOrientation != lastOrientation) {
-            context.findActivity().requestedOrientation =
-                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) {
-            viewModel.cancelControlsHideJob()
-            viewModel.showPlayerControls(context.findActivity(), isLandscape)
-        } else
-            if (isLandscape)
-                viewModel.createControlsHideJob(context.findActivity())
     }
 
     LaunchedEffect(volumeKeyChannel) {
@@ -325,8 +357,9 @@ fun LargeVideoPlayerScreen(
                     }
                 }
                 .pointerInput(isLockedOrientation, isLandscape) {
-                    if (!isLockedOrientation) {
-                        detectTapGestures(onDoubleTap = { offset ->
+                    if (isLockedOrientation) return@pointerInput
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
                             val isLeftSide = offset.x < size.width / 2
                             val isRightSide = offset.x >= size.width / 2
                             if (isLeftSide) {
@@ -342,18 +375,22 @@ fun LargeVideoPlayerScreen(
                                     viewModel.seekForward()
                                 }
                             }
-                        }, onTap = {
+                        },
+                        onTap = {
                             if (isControlsVisible) {
                                 enterFullScreenMode(context.findActivity())
+                                viewModel.cancelControlsHideJob()
                                 viewModel.hideControls()
                             } else {
-                                viewModel.cancelControlsHideJob()
-                                viewModel.showPlayerControls(context.findActivity(), isLandscape)
+                                viewModel.showControls()
+                                if (isLandscape)
+                                    viewModel.createControlsHideJob(context.findActivity())
                             }
-                        }, onPress = {
+                        },
+                        onPress = {
                             viewModel.cancelControlsHideJob()
                         })
-                    }
+
                 }) {
             if (isAudioOnly) {
                 Icon(
@@ -420,8 +457,10 @@ fun LargeVideoPlayerScreen(
         if (isLockedOrientation) {
             LockedButton(
                 onClick = {
+                    viewModel.showControls()
+                    if (isLandscape)
+                        viewModel.createControlsHideJob(context.findActivity())
                     viewModel.updateLockedOrientation(false)
-                    viewModel.showPlayerControls(context.findActivity(), isLandscape)
                     context.findActivity().requestedOrientation =
                         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 }
@@ -463,16 +502,10 @@ fun LargeVideoPlayerScreen(
                 onEnterPip = {
                     if (isBackgroundVideoPlayModeEnabled) {
                         if (!Settings.canDrawOverlays(context)) {
-                            drawOverlaysPermissionLauncher.launch(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    "package:$context.packageName".toUri()
-                                )
-                            )
-                        } else {
-                            prepareVideoPlaybackMode()
-                        }
 
+                            showOverlayPermissionRequestDialog = true
+                        } else
+                            prepareVideoPlaybackMode()
                     } else {
                         viewModel.hideControls()
                         context.findActivity().enterPictureInPictureMode(pipBuilder.build())
@@ -524,6 +557,7 @@ fun LargeVideoPlayerScreen(
                     }
                 },
                 onLockOrientation = {
+                    viewModel.cancelControlsHideJob()
                     viewModel.hideControls()
                     viewModel.updateLockedOrientation(true)
                 },
@@ -622,6 +656,104 @@ fun LargeVideoPlayerScreen(
                 onLocalSubtitleSelected = viewModel::updateCurrentLocalSubtitle,
                 onSubtitleToggle = viewModel::onSubtitleToggle
             )
+        }
+
+        if (showOverlayPermissionRequestDialog) {
+            OverlayPermissionRequestDialog(onAllowClick = {
+                drawOverlaysPermissionLauncher.launch(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        "package:$context.packageName".toUri()
+                    )
+                )
+            }, onClose = {
+                showOverlayPermissionRequestDialog = false
+            })
+        }
+    }
+}
+
+@Composable
+private fun OverlayPermissionRequestDialog(
+    onAllowClick: () -> Unit,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { NoIndicationInteractionSource() }
+            ) { onClose() },
+        contentAlignment = Alignment.Center
+    ) {
+        BoxWithConstraints (
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            val dialogWidth = when {
+                maxWidth < 600.dp -> {
+                    // 📱 Phones
+                    320.dp
+                }
+
+                maxWidth < 840.dp -> {
+                    // 📟 Tablets
+                    560.dp
+                }
+
+                else -> {
+                    // 🖥 Large screens (cap)
+                    560.dp
+                }
+            }
+
+            Card(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .widthIn(max = dialogWidth),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(8.dp),
+                interactionSource = remember { NoIndicationInteractionSource() },
+                onClick = {}
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
+                    Text(
+                        text = "Permission Required",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "To display content over other apps, please enable the Overlay Permission in settings. This is required for the app to function properly.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        TextButton(
+                            onClick = onAllowClick
+                        ) {
+                            Text("Allow")
+                        }
+
+                        TextButton(
+                            onClick = onClose
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
         }
     }
 }
