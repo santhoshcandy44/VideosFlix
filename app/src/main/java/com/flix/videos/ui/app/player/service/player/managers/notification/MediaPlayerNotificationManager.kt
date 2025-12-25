@@ -11,8 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import com.flix.videos.MainActivity
 import com.flix.videos.R
-import com.flix.videos.ui.app.player.PlayerActivity
-import com.flix.videos.ui.app.player.service.player.MediaPlayerService
+import com.flix.videos.ui.app.player.service.player.PipPlayerService
 import org.koin.core.annotation.Factory
 
 @Factory
@@ -30,6 +29,10 @@ class MediaPlayerNotificationManager(val applicationContext: Context) {
             .setContentTitle(mediaSession.player.mediaMetadata.title ?: "Playing")
             .setContentText(null)
             .setSmallIcon(R.drawable.ic_video_play)
+            .setStyle(
+               androidx.media.app.NotificationCompat.MediaStyle()
+                    .setShowActionsInCompactView(0, 1, 2)
+            )
             .addAction(
                 R.drawable.ic_video_backward,
                 "Previous",
@@ -55,14 +58,10 @@ class MediaPlayerNotificationManager(val applicationContext: Context) {
                 "Next",
                 createPendingIntent(Player.COMMAND_SEEK_TO_NEXT)
             )
-            .setStyle(
-               androidx.media.app.NotificationCompat.MediaStyle()
-                    .setShowActionsInCompactView(0, 1, 2)
-            )
             .setContentIntent(createContentIntent())
             .setOngoing(true)
             .setDeleteIntent(createDeleteIntent())
-            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -70,7 +69,7 @@ class MediaPlayerNotificationManager(val applicationContext: Context) {
     }
 
     private fun createPendingIntent(command: Int): PendingIntent {
-        val intent = Intent(applicationContext, MediaPlayerService::class.java).apply {
+        val intent = Intent(applicationContext, PipPlayerService::class.java).apply {
             action = when (command) {
                 Player.COMMAND_PLAY_PAUSE -> "ACTION_PLAY_PAUSE"
                 Player.COMMAND_SEEK_TO_NEXT -> "ACTION_NEXT"
@@ -100,7 +99,7 @@ class MediaPlayerNotificationManager(val applicationContext: Context) {
     }
 
     private fun createDeleteIntent(): PendingIntent {
-        val intent = Intent(applicationContext, MediaPlayerService::class.java).apply {
+        val intent = Intent(applicationContext, PipPlayerService::class.java).apply {
             action = "ACTION_STOP"
         }
         return PendingIntent.getService(
@@ -117,7 +116,7 @@ class MediaPlayerNotificationManager(val applicationContext: Context) {
                 NotificationChannel(
                     CHANNEL_ID,
                     "Media Playback",
-                    NotificationManager.IMPORTANCE_MIN
+                    NotificationManager.IMPORTANCE_LOW
                 ).apply {
                     setShowBadge(false)
                 }

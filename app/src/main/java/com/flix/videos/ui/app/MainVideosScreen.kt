@@ -39,12 +39,11 @@ import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 import com.flix.videos.ui.utils.SwingEdgeToEdgeEffect
 import org.koin.compose.koinInject
-import org.koin.compose.viewmodel.koinViewModel
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainVideosScreen(viewModel: ReadMediaVideosViewModel = koinViewModel()) {
+fun MainVideosScreen(viewModel: ReadMediaVideosViewModel) {
     val context = LocalContext.current
     val videosBackStack = viewModel.videosBackstack
     val albumsBackStack = viewModel.albumsBackStack

@@ -102,30 +102,26 @@ fun VideosScreen(
             )
         })
 
-        PermissionWrapper(onPermissionGranted = {
-            viewModel.fetchVideoInfos()
-        }) {
-            when (videosViewMode) {
-                ViewMode.LIST -> {
-                    VideosList(
-                        videInfos = videInfos,
-                        viewModel = viewModel,
-                        onItemClick = startPlayerActivity,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+        when (videosViewMode) {
+            ViewMode.LIST -> {
+                VideosList(
+                    videInfos = videInfos,
+                    viewModel = viewModel,
+                    onItemClick = startPlayerActivity,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-                ViewMode.GRID -> {
-                    VideosGrid(
-                        videInfos,
-                        modifier = Modifier.weight(1f),
-                        onItemClick = startPlayerActivity
-                    )
-                }
+            ViewMode.GRID -> {
+                VideosGrid(
+                    videInfos,
+                    modifier = Modifier.weight(1f),
+                    onItemClick = startPlayerActivity
+                )
+            }
 
-                ViewMode.FOLDER -> {
-                    FoldersScreen(groupedVideos, onGroupClick)
-                }
+            ViewMode.FOLDER -> {
+                FoldersScreen(groupedVideos, onGroupClick)
             }
         }
     }

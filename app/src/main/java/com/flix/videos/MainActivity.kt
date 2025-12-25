@@ -9,8 +9,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.flix.videos.ui.app.MainVideosScreen
+import com.flix.videos.ui.app.PermissionWrapper
+import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.theme.AppTheme
 import com.flix.videos.ui.utils.SafeDrawing
+import org.koin.compose.viewmodel.koinViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -22,7 +25,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppTheme {
                 SafeDrawing {
-                    MainVideosScreen()
+                    val viewModel: ReadMediaVideosViewModel = koinViewModel()
+                    PermissionWrapper(onPermissionGranted = {
+                        viewModel.fetchVideoInfos()
+                    }) {
+                        MainVideosScreen(viewModel)
+                    }
                 }
             }
         }
