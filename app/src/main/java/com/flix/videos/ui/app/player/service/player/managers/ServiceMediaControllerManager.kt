@@ -3,6 +3,7 @@ package com.flix.videos.ui.app.player.service.player.managers
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -16,7 +17,6 @@ class ServiceMediaControllerManager(
 ) : ControllerProvider {
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
-
 
     @Synchronized
     override fun getController(
@@ -53,8 +53,9 @@ class ServiceMediaControllerManager(
     }
 
     fun releaseMediaController() {
-        controller?.stop()
-        controller?.clearMediaItems()
+        Log.e("PLayer", "Controller is released")
+     /*   controller?.stop()
+        controller?.clearMediaItems()*/
         controller?.release()
         controller = null
         controllerFuture = null

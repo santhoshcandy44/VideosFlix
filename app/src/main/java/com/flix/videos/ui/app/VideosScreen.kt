@@ -34,15 +34,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.util.UnstableApi
 import com.flix.videos.R
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.PlayerActivity
-import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.player.service.player.PipPlayerService
+import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.app.viewmodel.ViewMode
 import org.koin.compose.koinInject
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VideosScreen(

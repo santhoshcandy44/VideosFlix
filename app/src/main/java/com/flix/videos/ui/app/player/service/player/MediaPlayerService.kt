@@ -18,7 +18,6 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.flix.videos.ui.app.player.service.CMD_START_AUDIO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.CMD_START_VIDEO_PLAYBACK_MODE
-import com.flix.videos.ui.app.player.service.CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.player.service.player.managers.notification.CustomMediaPlayerNotificationProvider
 import com.flix.videos.ui.app.player.service.player.managers.notification.MediaPlayerNotificationManager
@@ -42,6 +41,7 @@ abstract class MediaPlayerService : MediaSessionService() {
     private var loudnessEnhancer: LoudnessEnhancer? = null
 
     private var isBackgroundAudioMode = false
+    private var isBackgroundVideoMode = false
 
     val playerListener = object : Player.Listener {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -76,7 +76,6 @@ abstract class MediaPlayerService : MediaSessionService() {
                         MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                             .add(SessionCommand(CMD_START_VIDEO_PLAYBACK_MODE, Bundle.EMPTY))
                             .add(SessionCommand(CMD_START_AUDIO_PLAYBACK_MODE, Bundle.EMPTY))
-                            .add(SessionCommand(CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE, Bundle.EMPTY))
                             .build()
 
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
@@ -93,6 +92,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                 ): ListenableFuture<SessionResult> {
                     when (customCommand.customAction) {
                         CMD_START_VIDEO_PLAYBACK_MODE -> {
+                            isBackgroundVideoMode = true
                             val group = args.getString("group")
                             val videoId = args.getLong("video_id")
                             videoParams.value = VideoParams(group, videoId)
@@ -107,20 +107,21 @@ abstract class MediaPlayerService : MediaSessionService() {
                             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                         }
 
-                        CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE -> {
-                            serviceMediaControllerManager.releaseMediaController()
-                            stopForeground(STOP_FOREGROUND_REMOVE)
-                            stopSelf()
-
-                            return Futures.immediateFuture(
-                                SessionResult(SessionResult.RESULT_SUCCESS)
-                            )
-                        }
-
                         else -> {
                             return super.onCustomCommand(session, controller, customCommand, args)
                         }
                     }
+                }
+
+                override fun onDisconnected(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo
+                ) {
+                    if(isBackgroundVideoMode){
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                    super.onDisconnected(session, controller)
                 }
             })
             .build()
@@ -195,6 +196,7 @@ abstract class MediaPlayerService : MediaSessionService() {
             stopForegroundMediaPlayer()
         }
         isBackgroundAudioMode = false
+        isBackgroundVideoMode = false
         serviceMediaControllerManager.releaseMediaController()
         releaseLoudnessEnhancer()
         mediaSession?.release()

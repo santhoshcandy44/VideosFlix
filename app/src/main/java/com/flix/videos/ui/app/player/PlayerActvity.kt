@@ -21,6 +21,7 @@ import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
+@UnstableApi
 class PlayerActivity : ComponentActivity() {
     private val volumeKeyChannel = Channel<Int>(
         capacity = Channel.BUFFERED

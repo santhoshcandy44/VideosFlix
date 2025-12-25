@@ -40,7 +40,7 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
     private lateinit var layoutParams: WindowManager.LayoutParams
     private var overlayView: ComposeView? = null
 
-    companion object X {
+    companion object{
         @Volatile
         var isRunning = false
     }

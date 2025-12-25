@@ -1,8 +1,6 @@
 package com.flix.videos.ui.app.player
 
 import android.graphics.SurfaceTexture
-import android.os.Bundle
-import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
@@ -33,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -41,16 +38,13 @@ import androidx.core.view.doOnLayout
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.session.MediaController
-import androidx.media3.session.SessionCommand
 import com.flix.videos.R
-import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
 import com.flix.videos.models.VideoInfo
-import com.flix.videos.ui.app.player.service.CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE
-import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.player.service.player.PipPlayerService
+import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
+import com.flix.videos.ui.app.player.service.player.utils.WindowLayoutState
 import com.flix.videos.ui.utils.noRippleClickable
 import org.koin.compose.koinInject
-import org.koin.core.parameter.parametersOf
 
 @Composable
 fun OverlayVideoPlayerScreen(
@@ -196,18 +190,7 @@ fun OverlayVideoPlayerScreen(
             IconButton(
                 onClick = {
                     if (PipPlayerService.isRunning) {
-                        serviceMediaControllerManager.getController(
-                            null,
-                            Bundle.EMPTY
-                        ) { mediaController, _ ->
-                            mediaController.sendCustomCommand(
-                                SessionCommand(
-                                    CMD_STOP_OVERLAY_VIDEO_PLAYBACK_MODE,
-                                    Bundle.EMPTY
-                                ),
-                                Bundle.EMPTY
-                            )
-                        }
+                        serviceMediaControllerManager.releaseMediaController()
                     }
                 },
                 modifier = Modifier
