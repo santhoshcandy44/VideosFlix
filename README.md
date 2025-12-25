@@ -17,6 +17,9 @@ The app includes:
 * Custom permission rationale dialog
 * Settings redirection for denied permissions
 * Handles different Android API levels (13+ media permissions and older storage permission)
+* PIP mode and Overlay Mode
+* Background Overlay Play
+* Background Audio Play
 
 ### **Tech Used**
 
