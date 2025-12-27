@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -360,6 +361,7 @@ fun LargeVideoPlayerScreen(
                     if (isLockedOrientation) return@pointerInput
                     detectTapGestures(
                         onDoubleTap = { offset ->
+                            Log.e("Player","onDouble Tap")
                             val isLeftSide = offset.x < size.width / 2
                             val isRightSide = offset.x >= size.width / 2
                             if (isLeftSide) {
@@ -375,6 +377,8 @@ fun LargeVideoPlayerScreen(
                                     viewModel.seekForward()
                                 }
                             }
+                            if (isLandscape && isControlsVisible)
+                                viewModel.createControlsHideJobIfNot(context.findActivity())
                         },
                         onTap = {
                             if (isControlsVisible) {
@@ -390,7 +394,6 @@ fun LargeVideoPlayerScreen(
                         onPress = {
                             viewModel.cancelControlsHideJob()
                         })
-
                 }) {
             if (isAudioOnly) {
                 Icon(
@@ -558,13 +561,14 @@ fun LargeVideoPlayerScreen(
                 onLockOrientation = {
                     viewModel.cancelControlsHideJob()
                     viewModel.hideControls()
+                    context.findActivity().requestedOrientation =
+                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                     viewModel.updateLockedOrientation(true)
                 },
                 onRotateOrientation = { newOrientation, config ->
                     lastOrientation = config
                     context.findActivity().requestedOrientation = newOrientation
                 },
-
                 onSliderChange = {
                     viewModel.cancelControlsHideJob()
                     viewModel.onSliderValueChange(it)
@@ -659,6 +663,7 @@ fun LargeVideoPlayerScreen(
 
         if (showOverlayPermissionRequestDialog) {
             OverlayPermissionRequestDialog(onAllowClick = {
+                showOverlayPermissionRequestDialog = false
                 drawOverlaysPermissionLauncher.launch(
                     Intent(
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
