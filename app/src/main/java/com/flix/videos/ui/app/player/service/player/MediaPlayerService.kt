@@ -61,14 +61,6 @@ abstract class MediaPlayerService : MediaSessionService() {
             onAudioSessionId(audioSessionId)
             setGainMillibels(1500)
         }
-
-        override fun onPlaybackStateChanged(playbackState: Int) {
-            super.onPlaybackStateChanged(playbackState)
-            Log.e("Player", "onPlaybackStateChanged ${player.duration} $playbackState")
-            if (playbackState == Player.STATE_READY && player.duration > 0) {
-                playerNotificationManager?.invalidate()
-            }
-        }
     }
 
     override fun onCreate() {
@@ -219,7 +211,6 @@ abstract class MediaPlayerService : MediaSessionService() {
                 setUseNextActionInCompactView(true)
                 setUseChronometer(true)
                 setUseStopAction(true)
-                setUseChronometer(true)
             }
         playerNotificationManager!!.setPlayer(player)
     }
@@ -258,7 +249,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                                 null
                             )
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         null
                     }
 
