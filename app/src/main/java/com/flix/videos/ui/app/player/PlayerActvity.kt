@@ -37,7 +37,7 @@ class PlayerActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val uri = intent.data
-        if (uri == null && intent.action != "ACTION_NOTIFICATION_MEDIA_PLAYBACK") {
+        if (uri == null) {
             finish()
             return
         }
