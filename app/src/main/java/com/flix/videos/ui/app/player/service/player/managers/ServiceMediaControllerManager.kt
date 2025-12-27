@@ -53,9 +53,6 @@ class ServiceMediaControllerManager(
     }
 
     fun releaseMediaController() {
-        Log.e("PLayer", "Controller is released")
-     /*   controller?.stop()
-        controller?.clearMediaItems()*/
         controller?.release()
         controller = null
         controllerFuture = null
