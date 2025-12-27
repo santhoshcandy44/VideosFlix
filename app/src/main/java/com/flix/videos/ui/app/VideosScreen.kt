@@ -1,6 +1,7 @@
 package com.flix.videos.ui.app
 
 import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,9 +73,7 @@ fun VideosScreen(
                     })
         }
 
-        if (PipPlayerService
-                .isRunning
-        ) {
+        if (PipPlayerService.isRunning) {
             serviceMediaControllerManager.releaseMediaController()
         }
         launchPlayerActivity()

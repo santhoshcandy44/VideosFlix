@@ -3,10 +3,12 @@ package com.flix.videos.ui.app.player.viewmodel
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,7 +27,6 @@ import androidx.media3.session.MediaSession
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.player.ExoPlayerRepeatMode
 import com.flix.videos.ui.app.player.enterFullScreenMode
-import com.flix.videos.ui.app.player.exitFullScreenMode
 import com.flix.videos.ui.app.player.prefs.AudioTrackPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackPosPrefs
 import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
@@ -43,6 +44,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 data class AudioTrackInfo(
@@ -154,18 +156,6 @@ class VideoPlayerViewModel
     //Player Controls Hide Job
     private var playerControlsHideJob: Job? = null
 
-    /*   fun showPlayerControls(
-           activity: Activity,
-           isLandscape: Boolean,
-           scheduleControlsHideJob: Boolean = true
-       ) {
-           showControls()
-           if (!isLandscape)
-               exitFullScreenMode(activity)
-           if (isLandscape && scheduleControlsHideJob)
-               createControlsHideJob(activity)
-       }
-   */
     fun createControlsHideJob(activity: Activity, timeMillis: Long = 5000) {
         playerControlsHideJob = viewModelScope.launch {
             delay(timeMillis)

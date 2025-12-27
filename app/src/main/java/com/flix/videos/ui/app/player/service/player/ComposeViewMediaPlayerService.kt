@@ -41,11 +41,6 @@ abstract class ComposeViewMediaPlayerService : MediaPlayerService(), LifecycleOw
         return super.onBind(intent)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
-        return START_STICKY
-    }
-
     override val viewModelStore: ViewModelStore = vm
 
     override val savedStateRegistry: SavedStateRegistry =

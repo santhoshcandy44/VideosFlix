@@ -502,7 +502,6 @@ fun LargeVideoPlayerScreen(
                 onEnterPip = {
                     if (isBackgroundVideoPlayModeEnabled) {
                         if (!Settings.canDrawOverlays(context)) {
-
                             showOverlayPermissionRequestDialog = true
                         } else
                             prepareVideoPlaybackMode()
@@ -518,7 +517,7 @@ fun LargeVideoPlayerScreen(
                     ) { mediaController, _ ->
                         mediaController.stop()
                         viewModel.saveMediaIemCurrentPosition()
-                        val allVideos = viewModel.allVideos
+                        val allVideos = viewModel.requiredVideos
                         val playItemIndex = viewModel.findVideoIndexById(
                             allVideos,
                             currentPlayingVideoInfo.id

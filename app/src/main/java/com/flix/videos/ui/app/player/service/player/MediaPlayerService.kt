@@ -1,11 +1,16 @@
 package com.flix.videos.ui.app.player.service.player
 
+import android.app.Notification
+import android.app.PendingIntent
+import android.content.ContentUris
 import android.content.Intent
-import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -16,6 +21,9 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
+import androidx.media3.ui.PlayerNotificationManager
+import com.flix.videos.MainActivity
+import com.flix.videos.R
 import com.flix.videos.ui.app.player.service.CMD_START_AUDIO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.CMD_START_VIDEO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
@@ -24,7 +32,10 @@ import com.flix.videos.ui.app.player.service.player.managers.notification.MediaP
 import com.flix.videos.ui.app.player.viewmodel.VideoParams
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 @OptIn(UnstableApi::class)
@@ -102,7 +113,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                         }
 
                         CMD_START_AUDIO_PLAYBACK_MODE -> {
-                            startForegroundMediaPlayer(session)
+                            startForegroundMediaPlayer()
                             isBackgroundAudioMode = true
                             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                         }
@@ -117,7 +128,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo
                 ) {
-                    if(isBackgroundVideoMode){
+                    if (isBackgroundVideoMode) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     }
@@ -156,47 +167,21 @@ abstract class MediaPlayerService : MediaSessionService() {
         session: MediaSession,
         startInForegroundRequired: Boolean
     ) {
-        if (isBackgroundAudioMode)
-            startForegroundMediaPlayer(session)
-        else
+        if (isBackgroundVideoMode)
             super.onUpdateNotification(session, startInForegroundRequired)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            "ACTION_PLAY_PAUSE" -> mediaSession?.player?.apply {
-                Log.e("AudioPlayerService", "isPlaying: $isPlaying, playWhenReady: $playWhenReady")
-                if (isPlaying) pause() else {
-                    if (playbackState == Player.STATE_ENDED) {
-                        player.seekTo(0)
-                        player.play()
-                    } else {
-                        player.play()
-                    }
-                }
-            }
-
-            "ACTION_NEXT" -> mediaSession?.player?.seekToNext()
-
-            "ACTION_PREVIOUS" -> mediaSession?.player?.seekToPrevious()
-
-            "ACTION_STOP" -> {
-                mediaSession?.player?.stop()
-                mediaSession?.player?.release()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-        }
         return super.onStartCommand(intent, flags, startId)
     }
 
+    var playerNotificationManager: PlayerNotificationManager? = null
+
     override fun onDestroy() {
         Log.e("Player", "onDestroy: Media player service")
-        if (isBackgroundAudioMode) {
-            stopForegroundMediaPlayer()
-        }
         isBackgroundAudioMode = false
         isBackgroundVideoMode = false
+        playerNotificationManager?.setPlayer(null)
         serviceMediaControllerManager.releaseMediaController()
         releaseLoudnessEnhancer()
         mediaSession?.release()
@@ -206,22 +191,101 @@ abstract class MediaPlayerService : MediaSessionService() {
         super.onDestroy()
     }
 
-    fun startForegroundMediaPlayer(mediaSession: MediaSession) {
+    fun startForegroundMediaPlayer() {
         mediaPlayerNotificationManager.createMediaPlayBackNotificationChannel()
-        val mediaPlayerNotification = mediaPlayerNotificationManager.getMediaPlayerNotification(
-            mediaSession
+        playerNotificationManager = PlayerNotificationManager.Builder(
+            this,
+            MediaPlayerNotificationManager.NOTIFICATION_ID,
+            MediaPlayerNotificationManager.CHANNEL_ID
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-            startForeground(
-                MediaPlayerNotificationManager.NOTIFICATION_ID,
-                mediaPlayerNotification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        else
-            startForeground(MediaPlayerNotificationManager.NOTIFICATION_ID, mediaPlayerNotification)
+            .setMediaDescriptionAdapter(descriptionAdapter)
+            .setNotificationListener(notificationListener)
+            .build()
+            .apply {
+                setSmallIcon(R.drawable.ic_video_play)
+                setColorized(false)
+                setUseRewindAction(false)
+                setUseFastForwardAction(false)
+                setUsePreviousActionInCompactView(true)
+                setUseNextActionInCompactView(true)
+            }
+        playerNotificationManager!!.setPlayer(player)
     }
 
-    fun stopForegroundMediaPlayer() {
-        stopForeground(STOP_FOREGROUND_REMOVE)
-    }
+    private val descriptionAdapter =
+        object : PlayerNotificationManager.MediaDescriptionAdapter {
+            override fun getCurrentContentTitle(player: Player): CharSequence {
+                return player.mediaMetadata.title ?: ""
+            }
+
+            override fun getCurrentContentText(player: Player): CharSequence? {
+                return player.mediaMetadata.artist
+            }
+
+            @Suppress("DEPRECATION")
+            override fun getCurrentLargeIcon(
+                player: Player,
+                callback: PlayerNotificationManager.BitmapCallback
+            ): Bitmap? {
+                val mediaUri = player.currentMediaItem?.localConfiguration?.uri
+                    ?: return null
+
+                CoroutineScope(Dispatchers.IO).launch {
+                    val bitmap = try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            contentResolver.loadThumbnail(
+                                mediaUri,
+                                Size(300, 300),
+                                null
+                            )
+                        } else {
+                            val id = ContentUris.parseId(mediaUri)
+                            MediaStore.Video.Thumbnails.getThumbnail(
+                                contentResolver,
+                                id,
+                                MediaStore.Video.Thumbnails.MINI_KIND,
+                                null
+                            )
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
+                    bitmap?.let { callback.onBitmap(it) }
+                }
+                return null
+            }
+
+            override fun createCurrentContentIntent(player: Player): PendingIntent? {
+                return PendingIntent.getActivity(
+                    this@MediaPlayerService,
+                    0,
+                    Intent(this@MediaPlayerService, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+        }
+
+    private val notificationListener =
+        object : PlayerNotificationManager.NotificationListener {
+
+            override fun onNotificationPosted(
+                notificationId: Int,
+                notification: Notification,
+                ongoing: Boolean
+            ) {
+                if (ongoing)
+                    startForeground(notificationId, notification)
+            }
+
+            override fun onNotificationCancelled(
+                notificationId: Int,
+                dismissedByUser: Boolean
+            ) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
 }
