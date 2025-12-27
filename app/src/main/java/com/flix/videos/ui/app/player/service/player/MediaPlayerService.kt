@@ -36,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 
 @OptIn(UnstableApi::class)
@@ -229,7 +230,6 @@ abstract class MediaPlayerService : MediaSessionService() {
             ): Bitmap? {
                 val mediaUri = player.currentMediaItem?.localConfiguration?.uri
                     ?: return null
-
                 CoroutineScope(Dispatchers.IO).launch {
                     val bitmap = try {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -247,10 +247,13 @@ abstract class MediaPlayerService : MediaSessionService() {
                                 null
                             )
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
                         null
                     }
-                    bitmap?.let { callback.onBitmap(it) }
+
+                    withContext(Dispatchers.Main) {
+                        bitmap?.let { callback.onBitmap(it) }
+                    }
                 }
                 return null
             }
