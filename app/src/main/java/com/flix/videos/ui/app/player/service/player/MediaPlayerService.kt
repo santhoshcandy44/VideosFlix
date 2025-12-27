@@ -55,11 +55,19 @@ abstract class MediaPlayerService : MediaSessionService() {
     private var isBackgroundAudioMode = false
     private var isBackgroundVideoMode = false
 
-    val playerListener = object : Player.Listener {
+    private val playerListener = object : Player.Listener {
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             super.onAudioSessionIdChanged(audioSessionId)
             onAudioSessionId(audioSessionId)
             setGainMillibels(1500)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            super.onPlaybackStateChanged(playbackState)
+            Log.e("Player", "onPlaybackStateChanged ${player.duration} $playbackState")
+            if (playbackState == Player.STATE_READY && player.duration > 0) {
+                playerNotificationManager?.invalidate()
+            }
         }
     }
 
@@ -209,6 +217,9 @@ abstract class MediaPlayerService : MediaSessionService() {
                 setUseFastForwardAction(false)
                 setUsePreviousActionInCompactView(true)
                 setUseNextActionInCompactView(true)
+                setUseChronometer(true)
+                setUseStopAction(true)
+                setUseChronometer(true)
             }
         playerNotificationManager!!.setPlayer(player)
     }
@@ -287,8 +298,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                 notificationId: Int,
                 dismissedByUser: Boolean
             ) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                serviceMediaControllerManager.releaseMediaController()
             }
         }
 }
