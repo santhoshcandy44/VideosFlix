@@ -42,13 +42,13 @@ import org.koin.android.ext.android.inject
 @OptIn(UnstableApi::class)
 abstract class MediaPlayerService : MediaSessionService() {
     val serviceMediaControllerManager: ServiceMediaControllerManager by inject()
+    private val mediaPlayerNotificationManager by inject<MediaPlayerNotificationManager>()
 
     protected val videoParams = MutableStateFlow<VideoParams?>(null)
 
     private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
 
-    private val mediaPlayerNotificationManager by inject<MediaPlayerNotificationManager>()
 
     private var loudnessEnhancer: LoudnessEnhancer? = null
 
@@ -60,6 +60,16 @@ abstract class MediaPlayerService : MediaSessionService() {
             super.onAudioSessionIdChanged(audioSessionId)
             onAudioSessionId(audioSessionId)
             setGainMillibels(1500)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            super.onPlaybackStateChanged(playbackState)
+            if (playbackState == Player.STATE_ENDED) {
+                player.stop()
+                player.playWhenReady = false
+                player.seekTo(0, 0)
+                player.prepare()
+            }
         }
     }
 

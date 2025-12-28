@@ -155,9 +155,7 @@ class ReadMediaVideosViewModel(
     }
 
     fun makeNewlyAddedMediaIsSeen(videoId: Long){
-       viewModelScope.launch {
-           mediaPrefs.markVideoAsSeen(videoId)
-       }
+        mediaPrefs.markVideoAsSeen(videoId)
     }
 
     override fun onCleared() {

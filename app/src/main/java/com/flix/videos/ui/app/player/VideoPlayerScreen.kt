@@ -2,11 +2,13 @@ package com.flix.videos.ui.app.player
 
 import android.content.Intent
 import android.media.MediaScannerConnection
+import android.util.Log
 import android.view.TextureView
 import android.view.View
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -70,8 +72,8 @@ fun VideoPlayerScreen(
     val mediaController = mediaSessionControllerState ?: return
 
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
-    var videoWidth by remember { mutableIntStateOf(currentPlayingVideoInfo.width) }
-    var videoHeight by remember { mutableIntStateOf(currentPlayingVideoInfo.height) }
+    var videoWidth by remember { mutableIntStateOf(0) }
+    var videoHeight by remember{ mutableIntStateOf(0) }
     val totalDurationMillis = currentPlayingVideoInfo.duration
 
     val isAudioOnly by viewModel.isAudioOnly.collectAsState()
@@ -93,6 +95,7 @@ fun VideoPlayerScreen(
                     viewModel.saveMediaIemCurrentPosition()
                     mediaController.pause()
                 }
+
                 else -> {}
             }
         }

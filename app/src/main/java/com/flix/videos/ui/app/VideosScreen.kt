@@ -1,5 +1,7 @@
 package com.flix.videos.ui.app
 
+import android.app.Activity
+import android.app.ActivityOptions
 import android.content.Intent
 import android.util.Log
 import androidx.compose.foundation.Image
@@ -43,6 +45,7 @@ import com.flix.videos.ui.app.player.service.player.PipPlayerService
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
 import com.flix.videos.ui.app.viewmodel.ReadMediaVideosViewModel
 import com.flix.videos.ui.app.viewmodel.ViewMode
+import com.flix.videos.ui.utils.findActivity
 import org.koin.compose.koinInject
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -70,12 +73,16 @@ fun VideosScreen(
                         action = "ACTION_NEW_ACTIVITY"
                         data = videoInfo.uri
                         putExtra("video_id", videoInfo.id)
-                    })
+                    },
+                ActivityOptions.makeCustomAnimation(
+                    context,
+                    R.anim.slide_in_right,
+                    R.anim.slide_out_left
+                ).toBundle()
+            )
         }
-
-        if (PipPlayerService.isRunning) {
+        if (PipPlayerService.isRunning)
             serviceMediaControllerManager.releaseMediaController()
-        }
         launchPlayerActivity()
     }
 

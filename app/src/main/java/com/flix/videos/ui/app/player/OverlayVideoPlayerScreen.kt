@@ -1,6 +1,7 @@
 package com.flix.videos.ui.app.player
 
 import android.graphics.SurfaceTexture
+import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
@@ -59,8 +60,8 @@ fun OverlayVideoPlayerScreen(
 ) {
     val serviceMediaControllerManager: ServiceMediaControllerManager =
         koinInject<ServiceMediaControllerManager>()
-    var videoWidth by remember { mutableIntStateOf(videoInfo.width) }
-    var videoHeight by remember { mutableIntStateOf(videoInfo.height) }
+    var videoWidth by remember { mutableIntStateOf(0) }
+    var videoHeight by remember { mutableIntStateOf(0) }
     val latestWindowLayoutState by rememberUpdatedState(windowLayoutState)
 
     LaunchedEffect(windowLayoutState) {
@@ -73,7 +74,6 @@ fun OverlayVideoPlayerScreen(
                 super.onVideoSizeChanged(videoSize)
                 videoWidth = videoSize.width
                 videoHeight = videoSize.height
-                mediaController.setVideoTextureView(textureView)
                 updateWindowSize(videoWidth, videoHeight, false)
             }
         }

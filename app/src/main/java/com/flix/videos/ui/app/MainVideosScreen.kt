@@ -1,5 +1,6 @@
 package com.flix.videos.ui.app
 
+import android.app.ActivityOptions
 import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +29,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.flix.videos.R
 import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.app.bottombar.GroupVideos
 import com.flix.videos.ui.app.bottombar.NavigationBarItemInfo
@@ -61,12 +63,17 @@ fun MainVideosScreen(viewModel: ReadMediaVideosViewModel) {
                         data = videoInfo.uri
                         putExtra("video_id", videoInfo.id)
                         putExtra("group", group)
-                    })
+                    },
+                ActivityOptions.makeCustomAnimation(
+                    context,
+                    R.anim.slide_in_right,
+                    R.anim.slide_out_left
+                ).toBundle()
+            )
         }
 
-        if (PipPlayerService.isRunning) {
+        if (PipPlayerService.isRunning)
             serviceMediaControllerManager.releaseMediaController()
-        }
         launchPlayerActivity()
     }
 
