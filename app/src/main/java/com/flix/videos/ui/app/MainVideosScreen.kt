@@ -184,7 +184,8 @@ fun MainVideosScreen(viewModel: ReadMediaVideosViewModel) {
                             currentNavRoute = NavigationBarRoutes.Videos
                         }
                     }
-                })
+                }
+            )
         }
     }
 }

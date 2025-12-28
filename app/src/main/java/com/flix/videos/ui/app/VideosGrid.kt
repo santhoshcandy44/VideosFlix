@@ -26,20 +26,20 @@ import com.flix.videos.ui.utils.NoIndicationInteractionSource
 fun VideosGrid(
     videInfos: List<VideoInfo>,
     modifier: Modifier = Modifier,
-    onItemClick:(VideoInfo)-> Unit
-    ) {
+    onItemClick: (VideoInfo) -> Unit
+) {
     LazyVerticalStaggeredGrid(
-        modifier = modifier.fillMaxSize(),
         columns = StaggeredGridCells.Adaptive(120.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalItemSpacing = 8.dp,
-        contentPadding = PaddingValues(8.dp)
+        contentPadding = PaddingValues(8.dp),
+        modifier = modifier.fillMaxSize()
     ) {
         itemsIndexed(
             videInfos,
             key = { _, item -> item.uri }) { _, videoInfo ->
             videoInfo.thumbnail?.let {
-                OutlinedCard (
+                OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
                     interactionSource = remember { NoIndicationInteractionSource() },
                     onClick = {

@@ -43,9 +43,9 @@ fun FoldersScreen(
     onGroupClick: (String, String) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
     ) {
         itemsIndexed(
             groupedVideos.toList(),
@@ -84,15 +84,16 @@ fun FoldersScreen(
                     )
                 }
 
-                Column(modifier = Modifier
-                    .weight(1f)
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
                 ) {
                     Text(
                         value.first().displayGroupName,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if(value.any { it.isNewlyAdded }){
+                    if (value.any { it.isNewlyAdded }) {
                         NewVideoText()
                     }
                 }
@@ -102,7 +103,7 @@ fun FoldersScreen(
 }
 
 @Composable
-fun NewVideoText(){
+fun NewVideoText() {
     Text(
         "NEW",
         color = Color.White,
