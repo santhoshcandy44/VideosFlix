@@ -189,7 +189,6 @@ abstract class MediaPlayerService : MediaSessionService() {
     var playerNotificationManager: PlayerNotificationManager? = null
 
     override fun onDestroy() {
-        Log.e("Player", "onDestroy: Media player service")
         isBackgroundAudioMode = false
         isBackgroundVideoMode = false
         playerNotificationManager?.setPlayer(null)

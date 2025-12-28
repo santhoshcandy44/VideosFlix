@@ -288,7 +288,6 @@ class PipPlayerService : ComposeViewMediaPlayerService() {
         if (overlayView?.isAttachedToWindow == true) {
             windowManager?.removeView(overlayView)
         }
-        Log.e("Player", "onDestroy: PipPlayerService")
         super.onDestroy()
     }
 }
