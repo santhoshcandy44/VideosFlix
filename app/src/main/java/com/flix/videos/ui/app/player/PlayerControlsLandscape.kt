@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.flix.videos.R
-import com.flix.videos.models.VideoInfo
 import com.flix.videos.ui.utils.FormatterUtils.formatTimeSeconds
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 
