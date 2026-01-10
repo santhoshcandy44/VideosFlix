@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsEndWidth
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsStartWidth
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +36,7 @@ fun SafeDrawing(
     isNavigationBarContrastEnforced: Boolean = false,
     isImePaddingEnabled: Boolean = true,
     isLightStatusBarEnabled : Boolean  = true,
+    windowInsets: WindowInsets = WindowInsets.safeDrawing,
     content: @Composable () -> Unit
 ) {
     val window = LocalContext.current.findActivity().window
@@ -56,7 +59,7 @@ fun SafeDrawing(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .then(
-                    if (!isFullScreenMode) Modifier.safeDrawingPadding() else Modifier
+                    if (!isFullScreenMode) Modifier.windowInsetsPadding(windowInsets) else Modifier
                 )
                 .then(if (isImePaddingEnabled) Modifier.imePadding() else Modifier)
         ) {

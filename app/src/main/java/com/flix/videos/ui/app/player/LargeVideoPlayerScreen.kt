@@ -361,7 +361,6 @@ fun LargeVideoPlayerScreen(
                     if (isLockedOrientation) return@pointerInput
                     detectTapGestures(
                         onDoubleTap = { offset ->
-                            Log.e("Player","onDouble Tap")
                             val isLeftSide = offset.x < size.width / 2
                             val isRightSide = offset.x >= size.width / 2
                             if (isLeftSide) {
@@ -389,6 +388,8 @@ fun LargeVideoPlayerScreen(
                                 viewModel.showControls()
                                 if (isLandscape)
                                     viewModel.createControlsHideJob(context.findActivity())
+                                else
+                                    exitFullScreenMode(context.findActivity())
                             }
                         },
                         onPress = {
@@ -616,7 +617,6 @@ fun LargeVideoPlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 32.dp)
                     .onGloballyPositioned {

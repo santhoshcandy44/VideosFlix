@@ -3,11 +3,11 @@ package com.flix.videos.ui.app.player
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.annotation.OptIn
 import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Color
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -113,6 +113,19 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        enterFullScreenMode(this)
+        when(newConfig.orientation){
+            Configuration.ORIENTATION_PORTRAIT ->{
+                exitFullScreenMode(this)
+            }
+
+            Configuration.ORIENTATION_LANDSCAPE ->{
+                enterFullScreenMode(this)
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        exitFullScreenMode(this)
     }
 }
