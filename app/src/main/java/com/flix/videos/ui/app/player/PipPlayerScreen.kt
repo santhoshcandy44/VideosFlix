@@ -104,7 +104,6 @@ fun PipPlayerScreen(
         mediaController.addListener(listener)
         onDispose {
             mediaController.removeListener(listener)
-            mediaController.clearVideoTextureView(textureView)
         }
     }
 
