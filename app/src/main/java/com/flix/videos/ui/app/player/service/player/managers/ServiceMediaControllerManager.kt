@@ -20,7 +20,7 @@ class ServiceMediaControllerManager(
     @Synchronized
     override fun getController(
         sessionToken: SessionToken?,
-        args: Bundle,
+        connectionHints: Bundle,
         onReady: ((MediaController, ControllerSource) -> Unit)?
     ) {
         controller?.let {
@@ -37,7 +37,7 @@ class ServiceMediaControllerManager(
                     PipPlayerService::class.java
                 )
             )
-        ).setConnectionHints(args)
+        ).setConnectionHints(connectionHints)
             .buildAsync()
 
         controllerFuture?.let { future ->

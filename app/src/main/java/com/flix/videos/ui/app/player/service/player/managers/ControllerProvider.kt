@@ -10,5 +10,5 @@ enum class ControllerSource {
 }
 
 interface ControllerProvider {
-    fun getController(sessionToken: SessionToken?, args: Bundle, onReady: ((MediaController, ControllerSource) -> Unit)?)
+    fun getController(sessionToken: SessionToken?, connectionHints: Bundle, onReady: ((MediaController, ControllerSource) -> Unit)?)
 }

@@ -17,7 +17,7 @@ class MediaControllerManager(
 
     override fun getController(
         sessionToken: SessionToken?,
-        args: Bundle,
+        connectionHints: Bundle,
         onReady: ((MediaController, ControllerSource) -> Unit)?
     ) {
         if (sessionToken == null) throw IllegalArgumentException("session token can not be empty")

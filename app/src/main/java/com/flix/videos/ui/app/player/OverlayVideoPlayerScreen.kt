@@ -1,7 +1,6 @@
 package com.flix.videos.ui.app.player
 
 import android.graphics.SurfaceTexture
-import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import android.view.View

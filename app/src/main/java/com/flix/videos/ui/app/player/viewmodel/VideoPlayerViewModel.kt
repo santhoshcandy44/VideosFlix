@@ -63,8 +63,7 @@ data class VideoParams(
 
 @OptIn(UnstableApi::class)
 @KoinViewModel
-class VideoPlayerViewModel
-    (
+class VideoPlayerViewModel(
     val applicationContext: Context,
     @InjectedParam val isWindowMini: Boolean,
     @InjectedParam val videoParams: VideoParams,
@@ -169,12 +168,12 @@ class VideoPlayerViewModel
         playerControlsHideJob = null
     }
 
-    val subtitleObserver = SubtitleFilesObserver(applicationContext) {
-        _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
-    }
-
     private lateinit var player: ExoPlayer
     private lateinit var mediaSession: MediaSession
+
+    private val subtitleObserver = SubtitleFilesObserver(applicationContext) {
+        _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
+    }
 
     init {
         viewModelScope.launch {
@@ -194,10 +193,10 @@ class VideoPlayerViewModel
                 ?: emptyList() else allVideos
 
             val controllerManager =
-                if (isWindowMini) serviceMediaControllerManager!!
-                else mediaControllerManager!!
+                if (isWindowMini) serviceMediaControllerManager!! else mediaControllerManager!!
 
-            val sessionToken = if (isWindowMini)null
+            val sessionToken = if (isWindowMini)
+                null
             else {
                 player = ExoPlayer.Builder(applicationContext).build().apply {
                     setHandleAudioBecomingNoisy(true)
@@ -291,13 +290,11 @@ class VideoPlayerViewModel
     }
 
     fun findVideoIndexById(videos: List<VideoInfo>, videoId: Long): Int {
-        return videos.indexOfFirst { it.id == videoId }
-            .takeIf { it != -1 } ?: -1
+        return videos.indexOfFirst { it.id == videoId }.takeIf { it != -1 } ?: -1
     }
 
     fun getCurrentPlayingVideoInfo(mediaId: Long): VideoInfo? {
-        val playItemIndex = findVideoIndexById(requiredVideos, mediaId)
-        return requiredVideos.getOrNull(playItemIndex)
+        return requiredVideos.getOrNull(findVideoIndexById(requiredVideos, mediaId))
     }
 
     fun setCurrentPlayingVideoInfo(videoInfo: VideoInfo) {

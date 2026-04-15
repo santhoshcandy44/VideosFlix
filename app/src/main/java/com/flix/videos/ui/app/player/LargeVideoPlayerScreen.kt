@@ -4,7 +4,6 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.provider.Settings
-import android.util.Log
 import android.util.Rational
 import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,6 +80,7 @@ import com.flix.videos.ui.app.player.common.isLandscape
 import com.flix.videos.ui.app.player.observables.observeUserLeaveHint
 import com.flix.videos.ui.app.player.observables.observeVolumeChanges
 import com.flix.videos.ui.app.player.observables.rememberDeviceOrientationFlow
+import com.flix.videos.ui.app.player.prefs.PlaybackSettingsPrefs
 import com.flix.videos.ui.app.player.service.CMD_START_AUDIO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.CMD_START_VIDEO_PLAYBACK_MODE
 import com.flix.videos.ui.app.player.service.player.managers.ServiceMediaControllerManager
@@ -110,6 +110,8 @@ fun LargeVideoPlayerScreen(
     onPopUp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val playbackSettingsPrefs = koinInject<PlaybackSettingsPrefs>()
+
     //Currently Playing Media Info
     val videoParams = viewModel.videoParams
     val currentPlayingVideoInfo by viewModel.currentPlayingVideoInfo.collectAsState()
@@ -519,33 +521,58 @@ fun LargeVideoPlayerScreen(
                         null,
                         Bundle.EMPTY
                     ) { mediaController, _ ->
+
+                        fun applyRepeatMode(mode: ExoPlayerRepeatMode) {
+                            when (mode) {
+                                ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
+                                    mediaController.repeatMode = Player.REPEAT_MODE_OFF
+                                    mediaController.shuffleModeEnabled = false
+                                }
+
+                                ExoPlayerRepeatMode.REPEAT_MODE_ONE -> {
+                                    mediaController.repeatMode = Player.REPEAT_MODE_ONE
+                                    mediaController.shuffleModeEnabled = false
+                                }
+
+                                ExoPlayerRepeatMode.REPEAT_MODE_ALL -> {
+                                    mediaController.repeatMode = Player.REPEAT_MODE_ALL
+                                    mediaController.shuffleModeEnabled = false
+                                }
+
+                                ExoPlayerRepeatMode.SHUFFLE -> {
+                                    mediaController.shuffleModeEnabled = true
+                                    mediaController.repeatMode = Player.REPEAT_MODE_ALL
+                                }
+                            }
+                        }
+
                         mediaController.stop()
                         viewModel.saveMediaIemCurrentPosition()
+
                         val allVideos = viewModel.requiredVideos
-                        val playItemIndex = viewModel.findVideoIndexById(
-                            allVideos,
-                            currentPlayingVideoInfo.id
-                        ).let { if (it == -1) 0 else it }
-                        val currentPlayingVideoInfo2 = allVideos.getOrElse(
-                            playItemIndex
-                        ) { VideoInfo.EMPTY }
+                        val playItemIndex =
+                            viewModel.findVideoIndexById(allVideos, currentPlayingVideoInfo.id)
+                                .let { if (it == -1) 0 else it }
+
+                        val currentPlayingVideoInfo2 =
+                            allVideos.getOrElse(playItemIndex) { VideoInfo.EMPTY }
 
                         val mediaItems = allVideos.map { videoInfo ->
                             MediaItem.Builder()
                                 .setUri(videoInfo.uri)
                                 .setMediaId(videoInfo.id.toString())
                                 .setMediaMetadata(
-                                    MediaMetadata.Builder()
-                                        .setTitle(videoInfo.title)
-                                        .build()
+                                    MediaMetadata.Builder().setTitle(videoInfo.title).build()
                                 )
                                 .build()
                         }
+
                         mediaController.setMediaItems(
                             mediaItems,
                             playItemIndex,
                             viewModel.getMediaIemLastPosition(currentPlayingVideoInfo2.uri)
                         )
+                        applyRepeatMode(playbackSettingsPrefs.getPlaybackMode())
                         mediaController.prepare()
                         mediaController.play()
                         mediaController.sendCustomCommand(
@@ -692,7 +719,7 @@ private fun OverlayPermissionRequestDialog(
             ) { onClose() },
         contentAlignment = Alignment.Center
     ) {
-        BoxWithConstraints (
+        BoxWithConstraints(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
@@ -718,9 +745,7 @@ private fun OverlayPermissionRequestDialog(
                     .padding(24.dp)
                     .widthIn(max = dialogWidth),
                 shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(8.dp),
-                interactionSource = remember { NoIndicationInteractionSource() },
-                onClick = {}
+                elevation = CardDefaults.cardElevation(8.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp)
