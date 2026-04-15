@@ -54,7 +54,6 @@ data class VerticalDragState(
     val isDragging: Boolean = false
 )
 
-
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -338,7 +337,6 @@ fun VideoPlayerScreen(
                 viewModel = viewModel,
                 modifier = modifier
             )
-
         } else {
             LargeVideoPlayerScreen(
                 textureView = textureView,

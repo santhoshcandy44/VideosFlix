@@ -9,7 +9,6 @@ import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import android.util.Size
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -186,12 +185,12 @@ abstract class MediaPlayerService : MediaSessionService() {
         return super.onStartCommand(intent, flags, startId)
     }
 
-    var playerNotificationManager: PlayerNotificationManager? = null
+    lateinit var playerNotificationManager: PlayerNotificationManager
 
     override fun onDestroy() {
         isBackgroundAudioMode = false
         isBackgroundVideoMode = false
-        playerNotificationManager?.setPlayer(null)
+        playerNotificationManager .setPlayer(null)
         serviceMediaControllerManager.releaseMediaController()
         releaseLoudnessEnhancer()
         mediaSession?.release()
@@ -221,7 +220,7 @@ abstract class MediaPlayerService : MediaSessionService() {
                 setUseChronometer(true)
                 setUseStopAction(true)
             }
-        playerNotificationManager!!.setPlayer(player)
+        playerNotificationManager.setPlayer(player)
     }
 
     private val descriptionAdapter =

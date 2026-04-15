@@ -1,19 +1,16 @@
 package com.flix.videos.ui.app.player.service.player.managers
 
+import android.content.Context
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import org.koin.core.annotation.Factory
-import org.koin.core.annotation.InjectedParam
 
 @Factory
-@UnstableApi
 class MediaControllerManager(
-    @InjectedParam private val activity: ComponentActivity
+   private val context: Context
 ) : ControllerProvider {
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -23,7 +20,7 @@ class MediaControllerManager(
         args: Bundle,
         onReady: ((MediaController, ControllerSource) -> Unit)?
     ) {
-        if(sessionToken == null) throw IllegalArgumentException("session token can not be empty")
+        if (sessionToken == null) throw IllegalArgumentException("session token can not be empty")
 
         controller?.let {
             onReady?.invoke(it, ControllerSource.ACTIVITY)
@@ -33,15 +30,18 @@ class MediaControllerManager(
         if (controllerFuture == null) {
             controllerFuture =
                 MediaController.Builder(
-                    activity,
+                    context,
                     sessionToken
                 ).buildAsync()
         }
 
-        controllerFuture!!.addListener({
-            controller = controllerFuture!!.get()
-            onReady?.invoke(controller!!, ControllerSource.ACTIVITY)
-        }, ContextCompat.getMainExecutor(activity))
+        controllerFuture!!.addListener(
+            {
+                controller = controllerFuture!!.get()
+                onReady?.invoke(controller!!, ControllerSource.ACTIVITY)
+            },
+            ContextCompat.getMainExecutor(context)
+        )
     }
 
     fun releaseMediaController() {

@@ -3,12 +3,10 @@ package com.flix.videos.ui.app.player.viewmodel
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,9 +17,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import com.flix.videos.models.VideoInfo
@@ -44,7 +40,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
-import java.io.ByteArrayOutputStream
 import java.io.File
 
 data class AudioTrackInfo(
@@ -174,16 +169,12 @@ class VideoPlayerViewModel
         playerControlsHideJob = null
     }
 
-    private val defaultMediaSourceFactory =
-        DefaultMediaSourceFactory(DefaultDataSource.Factory(applicationContext))
-
     val subtitleObserver = SubtitleFilesObserver(applicationContext) {
         _localSubtitles.value = mediaSourceRepository.getSubtitleFiles()
     }
 
-    private var player: ExoPlayer? = null
-
-    private var mediaSession: MediaSession? = null
+    private lateinit var player: ExoPlayer
+    private lateinit var mediaSession: MediaSession
 
     init {
         viewModelScope.launch {
@@ -201,11 +192,12 @@ class VideoPlayerViewModel
                 }
             requiredVideos = if (videoParams.group != null) groupedVideos[videoParams.group]
                 ?: emptyList() else allVideos
-            val controllerManager =
-                if (isWindowMini) serviceMediaControllerManager
-                else mediaControllerManager
 
-            val sessionToken = if (isWindowMini) null
+            val controllerManager =
+                if (isWindowMini) serviceMediaControllerManager!!
+                else mediaControllerManager!!
+
+            val sessionToken = if (isWindowMini)null
             else {
                 player = ExoPlayer.Builder(applicationContext).build().apply {
                     setHandleAudioBecomingNoisy(true)
@@ -219,14 +211,14 @@ class VideoPlayerViewModel
                     )
                 }
 
-                mediaSession = MediaSession.Builder(applicationContext, player!!)
+                mediaSession = MediaSession.Builder(applicationContext, player)
                     .setId("local_media_session")
                     .build()
 
-                mediaSession!!.token
+                mediaSession.token
             }
 
-            controllerManager?.getController(
+            controllerManager.getController(
                 sessionToken,
                 Bundle.EMPTY
             ) { mediaController, source ->
@@ -727,15 +719,14 @@ class VideoPlayerViewModel
 
     fun releaseMediaController() {
         mediaControllerManager?.releaseMediaController()
-        mediaSession?.release()
-        mediaSession = null
-        player?.release()
-        player = null
+        mediaSession.release()
+        player.release()
     }
 
     override fun onCleared() {
-        releaseMediaController()
-        applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
         super.onCleared()
+        applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
+        if (!isWindowMini)
+            releaseMediaController()
     }
 }

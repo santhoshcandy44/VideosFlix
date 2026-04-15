@@ -3,7 +3,6 @@ package com.flix.videos.ui.app.player.service.player.managers
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -13,7 +12,7 @@ import org.koin.core.annotation.Single
 
 @Single
 class ServiceMediaControllerManager(
-    private val applicationContext: Context
+    private val context: Context
 ) : ControllerProvider {
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -30,15 +29,15 @@ class ServiceMediaControllerManager(
         }
 
         controllerFuture = controllerFuture ?: MediaController.Builder(
-            applicationContext,
+            context,
             SessionToken(
-                applicationContext,
+                context,
                 ComponentName(
-                    applicationContext,
+                    context,
                     PipPlayerService::class.java
                 )
             )
-        ) .setConnectionHints(args)
+        ).setConnectionHints(args)
             .buildAsync()
 
         controllerFuture?.let { future ->
@@ -47,7 +46,7 @@ class ServiceMediaControllerManager(
                     controller = future.get()
                     onReady?.invoke(controller!!, ControllerSource.SERVICE)
                 },
-                ContextCompat.getMainExecutor(applicationContext)
+                ContextCompat.getMainExecutor(context)
             )
         }
     }
