@@ -550,9 +550,7 @@ fun LargeVideoPlayerScreen(
                         viewModel.saveMediaIemCurrentPosition()
 
                         val allVideos = viewModel.requiredVideos
-                        val playItemIndex =
-                            viewModel.findVideoIndexById(allVideos, currentPlayingVideoInfo.id)
-                                .let { if (it == -1) 0 else it }
+                        val playItemIndex = viewModel.findVideoIndexById(allVideos, currentPlayingVideoInfo.id).let { if (it == -1) 0 else it }
 
                         val currentPlayingVideoInfo2 =
                             allVideos.getOrElse(playItemIndex) { VideoInfo.EMPTY }
