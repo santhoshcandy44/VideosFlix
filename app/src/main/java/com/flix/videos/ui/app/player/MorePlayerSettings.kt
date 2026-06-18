@@ -36,23 +36,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import com.flix.videos.ui.app.player.viewmodel.AudioTrackInfo
-import com.flix.videos.ui.app.player.viewmodel.SubtitleTrackInfo
 import com.flix.videos.ui.utils.NoIndicationInteractionSource
 
 @Composable
-fun BackgroundPipSettings(
-    isBackgroundPipPlayModeEnabled: Boolean,
-    onBackgroundPipPlayChange: ((Boolean) -> Unit)?,
+fun Settings(
+    isUseOverlayEnabled: Boolean,
+    onUseOverlayChange: ((Boolean) -> Unit)?,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Background Play Settings",
+            text = "Overlay",
             color = Color.LightGray,
             style = MaterialTheme.typography.bodyLarge
         )
@@ -62,14 +60,14 @@ fun BackgroundPipSettings(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Background Video",
+                text = "Use Overlay",
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Switch(
-                checked = isBackgroundPipPlayModeEnabled,
-                onCheckedChange = onBackgroundPipPlayChange
+                checked = isUseOverlayEnabled,
+                onCheckedChange = onUseOverlayChange
             )
         }
     }

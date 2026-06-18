@@ -30,8 +30,8 @@ fun BoxScope.VerticalDragController(
     volumeVerticalDragState: VerticalDragState,
     brightnessVerticalDragState: VerticalDragState
 ) {
-    val isVolumeActive = volumeChangeState.isDragging || volumeVerticalDragState.isDragging
-    val isBrightnessActive = brightnessVerticalDragState.isDragging
+    val isVolumeActive = volumeChangeState.show || volumeVerticalDragState.show
+    val isBrightnessActive = brightnessVerticalDragState.show
 
     if (isVolumeActive) {
         DragIndicator(
@@ -40,14 +40,14 @@ fun BoxScope.VerticalDragController(
                 .align(Alignment.CenterStart)
                 .padding(start = 16.dp),
             progressBarSize = verticalProgressBarSize,
-            progress = if (volumeChangeState.isDragging)
+            progress = if (volumeChangeState.show)
                 volumeChangeState.progress
             else
                 volumeVerticalDragState.progress,
             trackColor = Color(0xFF6EE66E).copy(0.6f),
             icon = Icons.AutoMirrored.Filled.VolumeOff,
             percent = playerVolumeToPercent(
-                (if (volumeChangeState.isDragging)
+                (if (volumeChangeState.show)
                     volumeChangeState.progress
                 else
                     volumeVerticalDragState.progress)

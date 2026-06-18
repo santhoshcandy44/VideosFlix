@@ -49,7 +49,6 @@ import org.koin.compose.koinInject
 @Composable
 fun OverlayVideoPlayerScreen(
     textureView: TextureView,
-    videoInfo: VideoInfo,
     isPlaying: Boolean,
     mediaController: MediaController,
     windowLayoutState: WindowLayoutState,

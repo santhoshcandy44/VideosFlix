@@ -7,18 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     id("org.jetbrains.kotlin.plugin.serialization")
+    alias(libs.plugins.koin.compiler)
 }
 
 android {
     namespace = "com.flix.videos"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.flix.videos"
-        minSdk = 26
-        targetSdk = 36
+        minSdk = 27
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -66,7 +67,6 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
     implementation(libs.koin.annotations)
-    ksp(libs.koin.ksp.compiler)
 
     //Navigation 3
     implementation(libs.androidx.navigation3.runtime)

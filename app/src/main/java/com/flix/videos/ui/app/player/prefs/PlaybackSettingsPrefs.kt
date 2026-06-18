@@ -19,7 +19,7 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
         private const val PLAYBACK_MODE = "playback_mode"
         private const val PLAYBACK_SPEED = "playback_speed"
 
-        private const val BACKGROUND_VIDEO_PLAY_ENABLED = "background_video_play_enabled"
+        private const val USE_OVERLAY_ENABLED = "use_overlay_enabled"
 
     }
 
@@ -35,12 +35,12 @@ class PlaybackSettingsPrefs(applicationContext: Context) {
 
     fun setBackgroundVideoPlayModeEnabled(enabled: Boolean) {
         prefs.edit {
-            putBoolean(BACKGROUND_VIDEO_PLAY_ENABLED, enabled)
+            putBoolean(USE_OVERLAY_ENABLED, enabled)
         }
     }
 
     fun isBackgroundVideoPlayModeEnabled(): Boolean {
-        return prefs.getBoolean(BACKGROUND_VIDEO_PLAY_ENABLED, true)
+        return prefs.getBoolean(USE_OVERLAY_ENABLED, true)
     }
 
     fun setSubtitlesEnabled(enabled: Boolean) {

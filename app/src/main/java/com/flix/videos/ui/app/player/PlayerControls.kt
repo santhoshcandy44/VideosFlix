@@ -48,7 +48,7 @@ import com.flix.videos.ui.utils.NoIndicationInteractionSource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerControlsLandscape(
+fun PlayerControls(
     isVisible: Boolean,
     isPlaying: Boolean,
     isMuted: Boolean,

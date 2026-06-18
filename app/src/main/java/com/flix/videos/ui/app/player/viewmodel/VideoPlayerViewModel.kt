@@ -38,8 +38,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.InjectedParam
+import org.koin.core.annotation.KoinViewModel
 import java.io.File
 
 data class AudioTrackInfo(
@@ -61,6 +61,13 @@ data class VideoParams(
     val id: Long
 )
 
+
+sealed class PlayerState {
+    data object Loading : PlayerState()
+    data class Ready(val controller: MediaController) : PlayerState()
+    data class Error(val message: String) : PlayerState()
+}
+
 @OptIn(UnstableApi::class)
 @KoinViewModel
 class VideoPlayerViewModel(
@@ -76,11 +83,8 @@ class VideoPlayerViewModel(
     val audioTrackPrefs: AudioTrackPrefs
 ) : ViewModel() {
 
-    private val _isLoading = MutableStateFlow(true)
-    val isLoading = _isLoading.asStateFlow()
-
-    private val _controllerState = MutableStateFlow<MediaController?>(null)
-    val controllerState = _controllerState.asStateFlow()
+    private val _playerState = MutableStateFlow<PlayerState>(PlayerState.Loading)
+    val playerState = _playerState.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
@@ -106,12 +110,15 @@ class VideoPlayerViewModel(
 
     val pipBuilder = PictureInPictureParams.Builder()
 
+    private val _isBuffering = MutableStateFlow(false)
+    val isBuffering = _isBuffering.asStateFlow()
+
     private val _isAudioOnly = MutableStateFlow(playbackSettingsPrefs.isAudioOnly())
     val isAudioOnly = _isAudioOnly.asStateFlow()
 
-    private val _isBackgroundVideoPlayModeEnabled =
+    private val _isUseOverlayEnabled=
         MutableStateFlow(playbackSettingsPrefs.isBackgroundVideoPlayModeEnabled())
-    val isBackgroundVideoPlayModeEnabled = _isBackgroundVideoPlayModeEnabled.asStateFlow()
+    val isUseOverlayEnabled = _isUseOverlayEnabled.asStateFlow()
 
     val playBackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -177,6 +184,7 @@ class VideoPlayerViewModel(
 
     init {
         viewModelScope.launch {
+            setIsBuffering(true)
             allVideos = mediaSourceRepository.getAllVideos()
             groupedVideos = allVideos.groupBy { File(it.path).parent ?: "Unknown" }
                 .mapValues { (groupParent, list) ->
@@ -221,7 +229,6 @@ class VideoPlayerViewModel(
                 sessionToken,
                 Bundle.EMPTY
             ) { mediaController, source ->
-                _controllerState.value = mediaController
                 _currentLocalSubtitle.value =
                     subtitlePrefs.getSavedSubtitleUri(_currentPlayingVideoInfo.value.uri)
                         ?.let { mediaSourceRepository.getSubtitleInfoFromUri(it) }
@@ -275,7 +282,7 @@ class VideoPlayerViewModel(
                     mediaController.play()
                 }
 
-                _isLoading.value = false
+                _playerState.value = PlayerState.Ready(mediaController)
             }
         }
 
@@ -322,7 +329,9 @@ class VideoPlayerViewModel(
         val updatedCurrentDurationMillis =
             (_sliderProgress.value * _currentPlayingVideoInfo.value.duration).toLong()
         onUpdateCurrentDurationMillis(updatedCurrentDurationMillis)
-        _controllerState.value?.let { controller ->
+        val state = _playerState.value
+        if (state is PlayerState.Ready) {
+            val controller = state.controller
             controller.seekTo(updatedCurrentDurationMillis)
             if (controller.playbackState == Player.STATE_IDLE) {
                 controller.prepare()
@@ -339,34 +348,37 @@ class VideoPlayerViewModel(
         _isPlaying.value = isPlaying
     }
 
-    fun togglePlayPause() {
-        _controllerState.value?.let { controller ->
-            if (controller.isPlaying) {
-                controller.pause()
+    fun togglePlayPause() = withController { controller ->
+        if (controller.isPlaying) {
+            controller.pause()
+        } else {
+            if (controller.playbackState == Player.STATE_IDLE) {
+                controller.seekTo(0)
+                controller.prepare()
+                controller.playWhenReady = true
             } else {
-                if (controller.playbackState == Player.STATE_IDLE) {
-                    controller.seekTo(0)
-                    controller.prepare()
-                    controller.playWhenReady = true
-                } else {
-                    controller.play()
-                }
+                controller.play()
             }
         }
     }
 
-    fun toggleMute() {
+
+    fun toggleMute() = withController { controller ->
         _isMuted.value = !_isMuted.value
-        _controllerState.value?.volume = if (_isMuted.value) 0f else 1f
+        controller.volume = if (_isMuted.value) 0f else 1f
     }
 
-    fun setMuted(muted: Boolean) {
+    fun setMuted(muted: Boolean) = withController { controller ->
         _isMuted.value = muted
-        _controllerState.value?.volume = if (muted) 0f else 1f
+        controller.volume = if (muted) 0f else 1f
     }
 
     fun updateLockedOrientation(isLocked: Boolean) {
         _isLockedOrientation.value = isLocked
+    }
+
+    fun setIsBuffering(isBuffering: Boolean) {
+        _isBuffering.value = isBuffering
     }
 
     fun toggleAudioOnly() {
@@ -374,15 +386,15 @@ class VideoPlayerViewModel(
         playbackSettingsPrefs.setAudioOnly(_isAudioOnly.value)
     }
 
-    fun toggleBackgroundVideoPlayModeEnabled(isChecked: Boolean) {
-        _isBackgroundVideoPlayModeEnabled.value = isChecked
+    fun toggleUseOverlayEnabled(isChecked: Boolean) {
+        _isUseOverlayEnabled.value = isChecked
         playbackSettingsPrefs.setBackgroundVideoPlayModeEnabled(isChecked)
     }
 
-    fun setCurrentPlayBackSpeed(speed: Float) {
+    fun setCurrentPlayBackSpeed(speed: Float) = withController { controller ->
         _currentPlayPackSpeed.value = speed
         playbackSettingsPrefs.setPlaybackSpeed(speed)
-        _controllerState.value?.setPlaybackSpeed(speed)
+        controller.setPlaybackSpeed(speed)
     }
 
     fun setCurrentPlayListRepeatMode(mode: ExoPlayerRepeatMode) {
@@ -391,28 +403,23 @@ class VideoPlayerViewModel(
         applyRepeatMode(mode)
     }
 
-    private fun applyRepeatMode(mode: ExoPlayerRepeatMode) {
-        _controllerState.value?.let { controller ->
-            when (mode) {
-                ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
-                    controller.repeatMode = Player.REPEAT_MODE_OFF
-                    controller.shuffleModeEnabled = false
-                }
-
-                ExoPlayerRepeatMode.REPEAT_MODE_ONE -> {
-                    controller.repeatMode = Player.REPEAT_MODE_ONE
-                    controller.shuffleModeEnabled = false
-                }
-
-                ExoPlayerRepeatMode.REPEAT_MODE_ALL -> {
-                    controller.repeatMode = Player.REPEAT_MODE_ALL
-                    controller.shuffleModeEnabled = false
-                }
-
-                ExoPlayerRepeatMode.SHUFFLE -> {
-                    controller.shuffleModeEnabled = true
-                    controller.repeatMode = Player.REPEAT_MODE_ALL
-                }
+    private fun applyRepeatMode(mode: ExoPlayerRepeatMode) = withController { controller ->
+        when (mode) {
+            ExoPlayerRepeatMode.REPEAT_MODE_OFF -> {
+                controller.repeatMode = Player.REPEAT_MODE_OFF
+                controller.shuffleModeEnabled = false
+            }
+            ExoPlayerRepeatMode.REPEAT_MODE_ONE -> {
+                controller.repeatMode = Player.REPEAT_MODE_ONE
+                controller.shuffleModeEnabled = false
+            }
+            ExoPlayerRepeatMode.REPEAT_MODE_ALL -> {
+                controller.repeatMode = Player.REPEAT_MODE_ALL
+                controller.shuffleModeEnabled = false
+            }
+            ExoPlayerRepeatMode.SHUFFLE -> {
+                controller.shuffleModeEnabled = true
+                controller.repeatMode = Player.REPEAT_MODE_ALL
             }
         }
     }
@@ -426,28 +433,27 @@ class VideoPlayerViewModel(
     }
 
     private fun getCurrentAudioTrack(): AudioTrackInfo? {
-        _controllerState.value?.let { controller ->
-            val groups = controller.currentTracks.groups
-            groups.forEachIndexed { groupIndex, group ->
-                if (group.type == C.TRACK_TYPE_AUDIO) {
-                    for (trackIndex in 0 until group.length) {
-                        if (group.isTrackSelected(trackIndex)) {
-                            val format = group.mediaTrackGroup.getFormat(trackIndex)
-
-                            val displayLabel =
-                                if (format.language != null && format.label != null) {
-                                    "${format.language}_${format.label}"
-                                } else {
-                                    "Audio Track ${trackIndex + 1}"
-                                }
-
-                            return AudioTrackInfo(
-                                groupIndex = groupIndex,
-                                trackIndex = trackIndex,
-                                language = format.language,
-                                label = displayLabel
-                            )
-                        }
+        val state = _playerState.value
+        if (state !is PlayerState.Ready) return null
+        val controller = state.controller
+        val groups = controller.currentTracks.groups
+        groups.forEachIndexed { groupIndex, group ->
+            if (group.type == C.TRACK_TYPE_AUDIO) {
+                for (trackIndex in 0 until group.length) {
+                    if (group.isTrackSelected(trackIndex)) {
+                        val format = group.mediaTrackGroup.getFormat(trackIndex)
+                        val displayLabel =
+                            if (format.language != null && format.label != null) {
+                                "${format.language}_${format.label}"
+                            } else {
+                                "Audio Track ${trackIndex + 1}"
+                            }
+                        return AudioTrackInfo(
+                            groupIndex = groupIndex,
+                            trackIndex = trackIndex,
+                            language = format.language,
+                            label = displayLabel
+                        )
                     }
                 }
             }
@@ -456,90 +462,76 @@ class VideoPlayerViewModel(
     }
 
     private fun getCurrentSubtitleTrack(): SubtitleTrackInfo? {
-        _controllerState.value?.let { controller ->
-            val groups = controller.currentTracks.groups
-            groups.forEachIndexed { groupIndex, group ->
-                if (group.type == C.TRACK_TYPE_TEXT) {
-                    for (trackIndex in 0 until group.length) {
-                        if (group.isTrackSelected(trackIndex)) {
-                            val format = group.mediaTrackGroup.getFormat(trackIndex)
-                            val displayLabel =
-                                if (format.language != null && format.label != null) {
-                                    "${format.language}_${format.label}"
-                                } else {
-                                    "Subtitle ${trackIndex + 1}"
-                                }
-                            return SubtitleTrackInfo(
-                                groupIndex = groupIndex,
-                                trackIndex = trackIndex,
-                                language = format.language,
-                                label = displayLabel
-                            )
-                        }
+        val state = _playerState.value
+        if (state !is PlayerState.Ready) return null
+        val controller = state.controller
+        val groups = controller.currentTracks.groups
+        groups.forEachIndexed { groupIndex, group ->
+            if (group.type == C.TRACK_TYPE_TEXT) {
+                for (trackIndex in 0 until group.length) {
+                    if (group.isTrackSelected(trackIndex)) {
+                        val format = group.mediaTrackGroup.getFormat(trackIndex)
+                        val displayLabel =
+                            if (format.language != null && format.label != null) {
+                                "${format.language}_${format.label}"
+                            } else {
+                                "Subtitle ${trackIndex + 1}"
+                            }
+                        return SubtitleTrackInfo(
+                            groupIndex = groupIndex,
+                            trackIndex = trackIndex,
+                            language = format.language,
+                            label = displayLabel
+                        )
                     }
                 }
             }
         }
-
         return null
     }
 
-    fun switchAudioTrack(
-        groupIndex: Int,
-        trackIndex: Int
-    ): Boolean {
-        _controllerState.value?.let { controller ->
-            val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
-
-            val override = TrackSelectionOverride(
-                group.mediaTrackGroup,
-                listOf(trackIndex)
-            )
-
-            val newParams = controller.trackSelectionParameters
-                .buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                .setOverrideForType(override)
-                .build()
-
-            controller.trackSelectionParameters = newParams
-            audioTrackPrefs.saveAudioTrack(
-                _currentPlayingVideoInfo.value.uri,
-                groupIndex,
-                trackIndex
-            )
-
-            return true
-        }
-        return false
+    fun switchAudioTrack(groupIndex: Int, trackIndex: Int): Boolean {
+        val state = _playerState.value
+        if (state !is PlayerState.Ready) return false
+        val controller = state.controller
+        val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
+        val override = TrackSelectionOverride(
+            group.mediaTrackGroup,
+            listOf(trackIndex)
+        )
+        val newParams = controller.trackSelectionParameters
+            .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+            .setOverrideForType(override)
+            .build()
+        controller.trackSelectionParameters = newParams
+        audioTrackPrefs.saveAudioTrack(
+            _currentPlayingVideoInfo.value.uri,
+            groupIndex,
+            trackIndex
+        )
+        return true
     }
 
-    fun switchSubTitleTrack(
-        subtitleTrack: SubtitleTrackInfo
-    ): Boolean {
-        _controllerState.value?.let { controller ->
-            val groupIndex = subtitleTrack.groupIndex
-            val trackIndex = subtitleTrack.trackIndex
-
-            val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
-
-            val override = TrackSelectionOverride(
-                group.mediaTrackGroup,
-                listOf(trackIndex)
-            )
-
-            val newParams = controller.trackSelectionParameters
-                .buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setOverrideForType(override)
-                .build()
-
-            controller.trackSelectionParameters = newParams
-            subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
-            return true
-        }
-
-        return false
+    fun switchSubTitleTrack(subtitleTrack: SubtitleTrackInfo): Boolean {
+        val state = _playerState.value
+        if (state !is PlayerState.Ready) return false
+        val controller = state.controller
+        val groupIndex = subtitleTrack.groupIndex
+        val trackIndex = subtitleTrack.trackIndex
+        val group = controller.currentTracks.groups.getOrNull(groupIndex) ?: return false
+        val override = TrackSelectionOverride(
+            group.mediaTrackGroup,
+            listOf(trackIndex)
+        )
+        val newParams = controller.trackSelectionParameters
+            .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setOverrideForType(override)
+            .build()
+        controller.trackSelectionParameters = newParams
+        subtitlePrefs.clearSubtitle(_currentPlayingVideoInfo.value.uri)
+        return true
     }
 
     fun onSubtitleToggle(isChecked: Boolean) {
@@ -551,26 +543,20 @@ class VideoPlayerViewModel(
         playbackSettingsPrefs.setSubtitlesEnabled(isChecked)
     }
 
-    fun enableSubtitles() {
-        _controllerState.value?.let { controller ->
-            val params = controller.trackSelectionParameters
-                .buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .build()
-
-            controller.trackSelectionParameters = params
-        }
+    fun enableSubtitles() = withController { controller ->
+        val params = controller.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+        controller.trackSelectionParameters = params
     }
 
-    fun disableSubtitles() {
-        _controllerState.value?.let { controller ->
-            val params = controller.trackSelectionParameters
-                .buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .build()
-
-            controller.trackSelectionParameters = params
-        }
+    fun disableSubtitles() = withController { controller ->
+        val params = controller.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        controller.trackSelectionParameters = params
     }
 
     fun updateCurrentLocalSubtitle(subtitleFileInfo: SubtitleFileInfo) {
@@ -579,101 +565,81 @@ class VideoPlayerViewModel(
         subtitlePrefs.saveSubtitleUri(_currentPlayingVideoInfo.value.uri, subtitleFileInfo.uri)
     }
 
-    private fun applyLocalSubtitle(uri: Uri) {
-        _controllerState.value?.let { controller ->
-            val currentIndex = controller.currentMediaItemIndex
-            val position = controller.currentPosition
-            val playWhenReady = controller.playWhenReady
+    private fun applyLocalSubtitle(uri: Uri) = withController { controller ->
+        val currentIndex = controller.currentMediaItemIndex
+        val position = controller.currentPosition
+        val playWhenReady = controller.playWhenReady
 
-            // Create subtitle config
-            val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(uri)
-                .setMimeType(
-                    mediaSourceRepository.detectSubtitleMimeType(uri)
-                )  // auto-detect (SRT/ASS/VTT)
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                .setRoleFlags(C.ROLE_FLAG_CAPTION)
-                .setLanguage("und")
-                .build()
+        val subtitleConfig = MediaItem.SubtitleConfiguration.Builder(uri)
+            .setMimeType(mediaSourceRepository.detectSubtitleMimeType(uri))
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .setRoleFlags(C.ROLE_FLAG_CAPTION)
+            .setLanguage("und")
+            .build()
 
-            val newMediaItems = requiredVideos.map { video ->
-                MediaItem.Builder()
-                    .setUri(video.uri)
-                    .setTag(video)
-                    .apply {
-                        if (video.id == _currentPlayingVideoInfo.value.id) {
-                            setSubtitleConfigurations(listOf(subtitleConfig))
-                        }
+        val newMediaItems = requiredVideos.map { video ->
+            MediaItem.Builder()
+                .setUri(video.uri)
+                .setTag(video)
+                .apply {
+                    if (video.id == _currentPlayingVideoInfo.value.id) {
+                        setSubtitleConfigurations(listOf(subtitleConfig))
                     }
-                    .build()
-            }
-
-            controller.setMediaItems(
-                newMediaItems,
-                currentIndex,
-                position
-            )
-            controller.prepare()
-            controller.playWhenReady = playWhenReady
-
-            val params = controller.trackSelectionParameters
-                .buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                }
                 .build()
-
-            controller.trackSelectionParameters = params
         }
+
+        controller.setMediaItems(newMediaItems, currentIndex, position)
+        controller.prepare()
+        controller.playWhenReady = playWhenReady
+
+        val params = controller.trackSelectionParameters
+            .buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+        controller.trackSelectionParameters = params
     }
 
-    fun seekForward(millis: Long = 10_000) {
-        _controllerState.value?.let { controller ->
-            val newPos =
-                (controller.currentPosition + millis).coerceAtMost(_currentPlayingVideoInfo.value.duration)
-            controller.seekTo(newPos)
-        }
+    fun seekForward(millis: Long = 10_000) = withController { controller ->
+        val newPos = (controller.currentPosition + millis)
+            .coerceAtMost(_currentPlayingVideoInfo.value.duration)
+        controller.seekTo(newPos)
     }
 
-    fun seekBackward(millis: Long = 10_000) {
-        _controllerState.value?.let { controller ->
-            val newPos = (controller.currentPosition - millis).coerceAtLeast(0)
-            controller.seekTo(newPos)
-        }
+    fun seekBackward(millis: Long = 10_000) = withController { controller ->
+        val newPos = (controller.currentPosition - millis).coerceAtLeast(0)
+        controller.seekTo(newPos)
     }
 
-    fun seekToNext() {
-        _controllerState.value?.let { controller ->
-            plaBackPosPrefs.savePosition(
-                _currentPlayingVideoInfo.value.uri,
-                controller.currentPosition
-            )
-            controller.seekToNextMediaItem()
-        }
+    fun seekToNext() = withController { controller ->
+        plaBackPosPrefs.savePosition(
+            _currentPlayingVideoInfo.value.uri,
+            controller.currentPosition
+        )
+        controller.seekToNextMediaItem()
     }
 
-    fun seekToPrevious() {
-        _controllerState.value?.let { controller ->
-            plaBackPosPrefs.savePosition(
-                _currentPlayingVideoInfo.value.uri,
-                controller.currentPosition
-            )
-            controller.seekToPreviousMediaItem()
-        }
+    fun seekToPrevious() = withController { controller ->
+        plaBackPosPrefs.savePosition(
+            _currentPlayingVideoInfo.value.uri,
+            controller.currentPosition
+        )
+        controller.seekToPreviousMediaItem()
     }
 
-    fun onFastSeekFinished() {
-        _controllerState.value?.let { controller ->
-            val sliderValue =
-                (controller.currentPosition / _currentPlayingVideoInfo.value.duration.toFloat())
-                    .takeIf { _currentPlayingVideoInfo.value.duration > 0 }
-                    ?.coerceIn(0f, 1f)
-                    ?: 0f
-            onSliderValueChange(sliderValue)
-        }
+    fun onFastSeekFinished() = withController { controller ->
+        val sliderValue =
+            (controller.currentPosition / _currentPlayingVideoInfo.value.duration.toFloat())
+                .takeIf { _currentPlayingVideoInfo.value.duration > 0 }
+                ?.coerceIn(0f, 1f)
+                ?: 0f
+        onSliderValueChange(sliderValue)
     }
 
     fun startUpdatingProgress() {
         if (progressJob?.isActive == true) return
-        _controllerState.value?.let { controller ->
+        withController { controller ->
             progressJob = viewModelScope.launch {
                 while (isActive) {
                     if (!isSliderValueChange) {
@@ -687,18 +653,15 @@ class VideoPlayerViewModel(
             }
         }
     }
-
     fun stopUpdatingProgress() {
         progressJob?.cancel()
         progressJob = null
     }
 
-    fun saveMediaIemCurrentPosition() {
-        _controllerState.value?.let { controller ->
-            val configuration = controller.currentMediaItem?.localConfiguration
-            configuration?.let {
-                plaBackPosPrefs.savePosition(it.uri, controller.currentPosition)
-            }
+    fun saveMediaIemCurrentPosition() = withController { controller ->
+        val configuration = controller.currentMediaItem?.localConfiguration
+        configuration?.let {
+            plaBackPosPrefs.savePosition(it.uri, controller.currentPosition)
         }
     }
 
@@ -720,6 +683,14 @@ class VideoPlayerViewModel(
         player.release()
     }
 
+
+    private fun withController(block: (MediaController) -> Unit) {
+        val state = _playerState.value
+        if (state is PlayerState.Ready) {
+            block(state.controller)
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         applicationContext.contentResolver.unregisterContentObserver(subtitleObserver)
@@ -727,3 +698,4 @@ class VideoPlayerViewModel(
             releaseMediaController()
     }
 }
+
